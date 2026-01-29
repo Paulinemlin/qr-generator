@@ -38,12 +38,20 @@ export default async function RedirectPage({ params }: PageProps) {
     console.error("Error recording scan:", error);
   }
 
-  const targetUrl = qrcode.targetUrl;
+  let targetUrl = qrcode.targetUrl;
+
+  // Ensure URL has a valid protocol
+  if (!targetUrl.startsWith("http://") && !targetUrl.startsWith("https://")) {
+    targetUrl = "https://" + targetUrl;
+  }
+
+  // Escape for safe JavaScript insertion
+  const safeUrl = targetUrl.replace(/\\/g, "\\\\").replace(/"/g, '\\"').replace(/'/g, "\\'");
 
   return (
     <html>
       <head>
-        <meta httpEquiv="refresh" content={`0;url=${targetUrl}`} />
+        <meta httpEquiv="refresh" content={`0;url=${encodeURI(targetUrl)}`} />
         <meta name="robots" content="noindex" />
         <title>Redirection...</title>
       </head>
@@ -80,7 +88,11 @@ export default async function RedirectPage({ params }: PageProps) {
           }
         `}} />
         <script dangerouslySetInnerHTML={{ __html: `
-          window.location.href = "${targetUrl}";
+          try {
+            window.location.replace("${safeUrl}");
+          } catch(e) {
+            window.location.href = "${safeUrl}";
+          }
         `}} />
       </body>
     </html>

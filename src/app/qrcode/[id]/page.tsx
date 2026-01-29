@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
+import { Label } from "@/components/ui/label";
 
 interface Scan {
   id: string;
@@ -23,12 +24,30 @@ interface QRCodeDetail {
   targetUrl: string;
   qrImageUrl: string | null;
   logoUrl: string | null;
+  foregroundColor: string;
+  backgroundColor: string;
+  size: number;
+  cornerStyle: string;
   createdAt: string;
   scans: Scan[];
   _count: {
     scans: number;
   };
 }
+
+const EXPORT_FORMATS = [
+  { value: "png", label: "PNG", description: "Image standard, idéal pour le web" },
+  { value: "svg", label: "SVG", description: "Vectoriel, parfait pour l'impression" },
+  { value: "jpeg", label: "JPEG", description: "Fichier plus léger, compression" },
+];
+
+const EXPORT_SIZES = [
+  { value: 200, label: "200px" },
+  { value: 400, label: "400px" },
+  { value: 800, label: "800px" },
+  { value: 1200, label: "1200px" },
+  { value: 2000, label: "2000px" },
+];
 
 export default function QRCodeDetailPage() {
   const { data: session, status } = useSession();
@@ -37,6 +56,9 @@ export default function QRCodeDetailPage() {
   const [qrcode, setQrcode] = useState<QRCodeDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [copied, setCopied] = useState(false);
+  const [exportFormat, setExportFormat] = useState("png");
+  const [exportSize, setExportSize] = useState(400);
+  const [downloading, setDownloading] = useState(false);
 
   useEffect(() => {
     if (status === "unauthenticated") {
@@ -59,6 +81,7 @@ export default function QRCodeDetailPage() {
       }
       const data = await res.json();
       setQrcode(data);
+      setExportSize(data.size || 400);
     } catch (error) {
       console.error("Error fetching QR code:", error);
       router.push("/dashboard");
@@ -67,12 +90,35 @@ export default function QRCodeDetailPage() {
     }
   };
 
-  const downloadQRCode = () => {
-    if (!qrcode?.qrImageUrl) return;
-    const link = document.createElement("a");
-    link.href = qrcode.qrImageUrl;
-    link.download = `${qrcode.name}.png`;
-    link.click();
+  const downloadQRCode = async () => {
+    if (!qrcode) return;
+
+    setDownloading(true);
+    try {
+      const response = await fetch(
+        `/api/qrcodes/${qrcode.id}/export?format=${exportFormat}&size=${exportSize}`,
+        { credentials: "include" }
+      );
+
+      if (!response.ok) {
+        throw new Error("Export failed");
+      }
+
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+
+      const extension = exportFormat === "jpeg" ? "jpg" : exportFormat;
+      link.download = `${qrcode.name.replace(/[^a-zA-Z0-9]/g, "_")}.${extension}`;
+      link.click();
+
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error("Download error:", error);
+    } finally {
+      setDownloading(false);
+    }
   };
 
   const copyUrl = (url: string) => {
@@ -201,112 +247,216 @@ export default function QRCodeDetailPage() {
       <main className="mx-auto max-w-5xl px-6 py-12">
         <div className="grid grid-cols-1 gap-8 lg:grid-cols-2">
           {/* QR Code Card */}
-          <Card className="border-0 shadow-lg">
-            <CardHeader>
-              <CardTitle className="text-2xl">{qrcode.name}</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              {qrcode.qrImageUrl && (
-                <div className="flex justify-center rounded-xl bg-muted/30 p-6">
-                  <Image
-                    src={qrcode.qrImageUrl}
-                    alt={qrcode.name}
-                    width={280}
-                    height={280}
-                    className="rounded-lg"
-                  />
+          <div className="space-y-6">
+            <Card className="border-0 shadow-lg">
+              <CardHeader>
+                <CardTitle className="text-2xl">{qrcode.name}</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                {qrcode.qrImageUrl && (
+                  <div
+                    className="flex justify-center rounded-xl p-6"
+                    style={{ backgroundColor: qrcode.backgroundColor }}
+                  >
+                    <Image
+                      src={qrcode.qrImageUrl}
+                      alt={qrcode.name}
+                      width={280}
+                      height={280}
+                      className="rounded-lg"
+                    />
+                  </div>
+                )}
+
+                <div className="space-y-4">
+                  <div className="space-y-1">
+                    <p className="text-sm text-muted-foreground">
+                      URL de destination
+                    </p>
+                    <p className="text-sm break-all">{qrcode.targetUrl}</p>
+                  </div>
+
+                  <Separator />
+
+                  <div className="space-y-2">
+                    <p className="text-sm text-muted-foreground">
+                      URL du QR code
+                    </p>
+                    <div className="flex items-center gap-2">
+                      <code className="flex-1 rounded-lg bg-muted px-3 py-2 text-xs break-all">
+                        {redirectUrl}
+                      </code>
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        onClick={() => copyUrl(redirectUrl)}
+                      >
+                        {copied ? (
+                          <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            width="14"
+                            height="14"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="2"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          >
+                            <path d="M20 6 9 17l-5-5" />
+                          </svg>
+                        ) : (
+                          <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            width="14"
+                            height="14"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="2"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          >
+                            <rect width="14" height="14" x="8" y="8" rx="2" ry="2" />
+                            <path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2" />
+                          </svg>
+                        )}
+                      </Button>
+                    </div>
+                  </div>
+
+                  <Separator />
+
+                  <div className="grid grid-cols-2 gap-4 text-sm">
+                    <div>
+                      <p className="text-muted-foreground">Créé le</p>
+                      <p>{formatDate(qrcode.createdAt)}</p>
+                    </div>
+                    <div>
+                      <p className="text-muted-foreground">Taille</p>
+                      <p>{qrcode.size}px</p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <p className="text-muted-foreground">Couleur QR</p>
+                      <div
+                        className="h-4 w-4 rounded border"
+                        style={{ backgroundColor: qrcode.foregroundColor }}
+                      />
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <p className="text-muted-foreground">Fond</p>
+                      <div
+                        className="h-4 w-4 rounded border"
+                        style={{ backgroundColor: qrcode.backgroundColor }}
+                      />
+                    </div>
+                  </div>
                 </div>
-              )}
+              </CardContent>
+            </Card>
 
-              <div className="space-y-4">
-                <div className="space-y-1">
-                  <p className="text-sm text-muted-foreground">
-                    URL de destination
-                  </p>
-                  <p className="text-sm break-all">{qrcode.targetUrl}</p>
-                </div>
-
-                <Separator />
-
-                <div className="space-y-2">
-                  <p className="text-sm text-muted-foreground">
-                    URL du QR code
-                  </p>
-                  <div className="flex items-center gap-2">
-                    <code className="flex-1 rounded-lg bg-muted px-3 py-2 text-xs break-all">
-                      {redirectUrl}
-                    </code>
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      onClick={() => copyUrl(redirectUrl)}
-                    >
-                      {copied ? (
-                        <svg
-                          xmlns="http://www.w3.org/2000/svg"
-                          width="14"
-                          height="14"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke="currentColor"
-                          strokeWidth="2"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                        >
-                          <path d="M20 6 9 17l-5-5" />
-                        </svg>
-                      ) : (
-                        <svg
-                          xmlns="http://www.w3.org/2000/svg"
-                          width="14"
-                          height="14"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke="currentColor"
-                          strokeWidth="2"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                        >
-                          <rect width="14" height="14" x="8" y="8" rx="2" ry="2" />
-                          <path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2" />
-                        </svg>
-                      )}
-                    </Button>
+            {/* Export Card */}
+            <Card className="border-0 shadow-lg">
+              <CardHeader>
+                <CardTitle className="text-lg">Télécharger</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-3">
+                  <Label>Format</Label>
+                  <div className="grid grid-cols-3 gap-2">
+                    {EXPORT_FORMATS.map((format) => (
+                      <button
+                        key={format.value}
+                        type="button"
+                        onClick={() => setExportFormat(format.value)}
+                        className={`rounded-lg border p-3 text-left transition-apple hover:bg-muted ${
+                          exportFormat === format.value
+                            ? "border-foreground bg-muted"
+                            : "border-border"
+                        }`}
+                      >
+                        <p className="font-medium">{format.label}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {format.description}
+                        </p>
+                      </button>
+                    ))}
                   </div>
                 </div>
 
-                <Separator />
-
-                <div className="space-y-1">
-                  <p className="text-sm text-muted-foreground">Créé le</p>
-                  <p className="text-sm">{formatDate(qrcode.createdAt)}</p>
+                <div className="space-y-3">
+                  <Label>Taille</Label>
+                  <div className="flex flex-wrap gap-2">
+                    {EXPORT_SIZES.map((size) => (
+                      <button
+                        key={size.value}
+                        type="button"
+                        onClick={() => setExportSize(size.value)}
+                        className={`rounded-lg border px-3 py-2 text-sm transition-apple hover:bg-muted ${
+                          exportSize === size.value
+                            ? "border-foreground bg-muted"
+                            : "border-border"
+                        }`}
+                      >
+                        {size.label}
+                      </button>
+                    ))}
+                  </div>
                 </div>
-              </div>
 
-              <Button onClick={downloadQRCode} className="w-full h-11">
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  width="16"
-                  height="16"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  className="mr-2"
+                <Button
+                  onClick={downloadQRCode}
+                  disabled={downloading}
+                  className="w-full h-11"
                 >
-                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                  <polyline points="7 10 12 15 17 10" />
-                  <line x1="12" x2="12" y1="15" y2="3" />
-                </svg>
-                Télécharger le QR Code
-              </Button>
-            </CardContent>
-          </Card>
+                  {downloading ? (
+                    <span className="flex items-center gap-2">
+                      <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
+                        <circle
+                          className="opacity-25"
+                          cx="12"
+                          cy="12"
+                          r="10"
+                          stroke="currentColor"
+                          strokeWidth="4"
+                          fill="none"
+                        />
+                        <path
+                          className="opacity-75"
+                          fill="currentColor"
+                          d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                        />
+                      </svg>
+                      Préparation...
+                    </span>
+                  ) : (
+                    <>
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        width="16"
+                        height="16"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        className="mr-2"
+                      >
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                        <polyline points="7 10 12 15 17 10" />
+                        <line x1="12" x2="12" y1="15" y2="3" />
+                      </svg>
+                      Télécharger en {exportFormat.toUpperCase()} ({exportSize}px)
+                    </>
+                  )}
+                </Button>
+              </CardContent>
+            </Card>
+          </div>
 
           {/* Stats Card */}
-          <Card className="border-0 shadow-lg">
+          <Card className="border-0 shadow-lg h-fit">
             <CardHeader className="flex flex-row items-center justify-between">
               <CardTitle className="text-xl">Statistiques</CardTitle>
               <Badge variant="secondary" className="text-base px-4 py-1">
@@ -342,7 +492,7 @@ export default function QRCodeDetailPage() {
               ) : (
                 <div className="space-y-4">
                   <p className="text-sm text-muted-foreground">Derniers scans</p>
-                  <div className="max-h-[400px] space-y-2 overflow-y-auto pr-2">
+                  <div className="max-h-[500px] space-y-2 overflow-y-auto pr-2">
                     {qrcode.scans.map((scan) => (
                       <div
                         key={scan.id}

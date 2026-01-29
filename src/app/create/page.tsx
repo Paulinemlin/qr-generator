@@ -5,10 +5,29 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
+import { QRCodeSVG } from "qrcode.react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import { Separator } from "@/components/ui/separator";
+
+const COLOR_PRESETS = [
+  { name: "Classique", foreground: "#000000", background: "#ffffff" },
+  { name: "Bleu", foreground: "#1e40af", background: "#ffffff" },
+  { name: "Vert", foreground: "#166534", background: "#ffffff" },
+  { name: "Rouge", foreground: "#991b1b", background: "#ffffff" },
+  { name: "Violet", foreground: "#6b21a8", background: "#ffffff" },
+  { name: "Orange", foreground: "#c2410c", background: "#ffffff" },
+  { name: "Inversé", foreground: "#ffffff", background: "#000000" },
+];
+
+const SIZE_OPTIONS = [
+  { value: 200, label: "Petit (200px)" },
+  { value: 400, label: "Moyen (400px)" },
+  { value: 800, label: "Grand (800px)" },
+  { value: 1200, label: "Très grand (1200px)" },
+];
 
 export default function CreatePage() {
   const { data: session, status } = useSession();
@@ -16,6 +35,10 @@ export default function CreatePage() {
   const [name, setName] = useState("");
   const [targetUrl, setTargetUrl] = useState("");
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
+  const [foregroundColor, setForegroundColor] = useState("#000000");
+  const [backgroundColor, setBackgroundColor] = useState("#ffffff");
+  const [size, setSize] = useState(400);
+  const [cornerStyle, setCornerStyle] = useState<"square" | "rounded">("square");
   const [uploading, setUploading] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -58,6 +81,11 @@ export default function CreatePage() {
     }
   };
 
+  const handleColorPreset = (preset: typeof COLOR_PRESETS[0]) => {
+    setForegroundColor(preset.foreground);
+    setBackgroundColor(preset.background);
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
@@ -67,7 +95,15 @@ export default function CreatePage() {
       const res = await fetch("/api/qrcodes", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, targetUrl, logoUrl }),
+        body: JSON.stringify({
+          name,
+          targetUrl,
+          logoUrl,
+          foregroundColor,
+          backgroundColor,
+          size,
+          cornerStyle,
+        }),
         credentials: "include",
       });
 
@@ -111,11 +147,14 @@ export default function CreatePage() {
 
   if (!session) return null;
 
+  // URL pour l'aperçu (utilise l'URL saisie ou un placeholder)
+  const previewUrl = targetUrl || "https://exemple.com";
+
   return (
     <div className="min-h-screen">
       {/* Header */}
       <header className="sticky top-0 z-50 w-full border-b border-border/40 bg-background/80 backdrop-blur-xl supports-[backdrop-filter]:bg-background/60">
-        <div className="mx-auto flex h-16 max-w-4xl items-center justify-between px-6">
+        <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-6">
           <Link href="/" className="flex items-center gap-2">
             <span className="text-xl font-semibold tracking-tight">
               QR Generator
@@ -144,58 +183,208 @@ export default function CreatePage() {
         </div>
       </header>
 
-      <main className="mx-auto max-w-xl px-6 py-12">
+      <main className="mx-auto max-w-6xl px-6 py-12">
         <div className="mb-8">
           <h1 className="text-3xl font-semibold tracking-tight">
             Créer un QR Code
           </h1>
           <p className="mt-2 text-muted-foreground">
-            Générez un QR code personnalisé avec votre logo
+            Personnalisez votre QR code avec des couleurs et un logo
           </p>
         </div>
 
-        <Card className="border-0 shadow-lg">
-          <form onSubmit={handleSubmit}>
-            <CardHeader>
-              <CardTitle className="text-lg">Informations</CardTitle>
-              {error && (
-                <div className="rounded-lg bg-destructive/10 p-3 text-sm text-destructive">
-                  {error}
+        <div className="grid grid-cols-1 gap-8 lg:grid-cols-5">
+          {/* Formulaire - 3 colonnes */}
+          <form onSubmit={handleSubmit} className="space-y-6 lg:col-span-3">
+            {/* Basic Info */}
+            <Card className="border-0 shadow-lg">
+              <CardHeader>
+                <CardTitle className="text-lg">Informations</CardTitle>
+                {error && (
+                  <div className="rounded-lg bg-destructive/10 p-3 text-sm text-destructive">
+                    {error}
+                  </div>
+                )}
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="name">Nom du QR Code</Label>
+                  <Input
+                    id="name"
+                    type="text"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    required
+                    placeholder="Ma campagne marketing"
+                    className="h-11"
+                  />
                 </div>
-              )}
-            </CardHeader>
-            <CardContent className="space-y-6">
-              <div className="space-y-2">
-                <Label htmlFor="name">Nom du QR Code</Label>
-                <Input
-                  id="name"
-                  type="text"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  required
-                  placeholder="Ma campagne marketing"
-                  className="h-11"
-                />
-              </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="targetUrl">URL de destination</Label>
-                <Input
-                  id="targetUrl"
-                  type="url"
-                  value={targetUrl}
-                  onChange={(e) => setTargetUrl(e.target.value)}
-                  required
-                  placeholder="https://www.exemple.com"
-                  className="h-11"
-                />
-                <p className="text-xs text-muted-foreground">
-                  L&apos;URL vers laquelle les utilisateurs seront redirigés
-                </p>
-              </div>
+                <div className="space-y-2">
+                  <Label htmlFor="targetUrl">URL de destination</Label>
+                  <Input
+                    id="targetUrl"
+                    type="url"
+                    value={targetUrl}
+                    onChange={(e) => setTargetUrl(e.target.value)}
+                    required
+                    placeholder="https://www.exemple.com"
+                    className="h-11"
+                  />
+                </div>
+              </CardContent>
+            </Card>
 
-              <div className="space-y-2">
-                <Label>Logo (optionnel)</Label>
+            {/* Customization */}
+            <Card className="border-0 shadow-lg">
+              <CardHeader>
+                <CardTitle className="text-lg">Personnalisation</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                {/* Color Presets */}
+                <div className="space-y-3">
+                  <Label>Couleurs prédéfinies</Label>
+                  <div className="flex flex-wrap gap-2">
+                    {COLOR_PRESETS.map((preset) => (
+                      <button
+                        key={preset.name}
+                        type="button"
+                        onClick={() => handleColorPreset(preset)}
+                        className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-sm transition-apple hover:bg-muted ${
+                          foregroundColor === preset.foreground &&
+                          backgroundColor === preset.background
+                            ? "border-foreground bg-muted"
+                            : "border-border"
+                        }`}
+                      >
+                        <div
+                          className="h-4 w-4 rounded border"
+                          style={{
+                            backgroundColor: preset.background,
+                            borderColor: preset.foreground,
+                          }}
+                        >
+                          <div
+                            className="h-full w-full rounded-sm"
+                            style={{
+                              background: `linear-gradient(135deg, ${preset.foreground} 50%, ${preset.background} 50%)`,
+                            }}
+                          />
+                        </div>
+                        {preset.name}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <Separator />
+
+                {/* Custom Colors */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="foregroundColor">Couleur du QR</Label>
+                    <div className="flex gap-2">
+                      <input
+                        type="color"
+                        id="foregroundColor"
+                        value={foregroundColor}
+                        onChange={(e) => setForegroundColor(e.target.value)}
+                        className="h-11 w-14 cursor-pointer rounded-lg border border-border p-1"
+                      />
+                      <Input
+                        type="text"
+                        value={foregroundColor}
+                        onChange={(e) => setForegroundColor(e.target.value)}
+                        className="h-11 font-mono"
+                        pattern="^#[0-9A-Fa-f]{6}$"
+                      />
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="backgroundColor">Couleur de fond</Label>
+                    <div className="flex gap-2">
+                      <input
+                        type="color"
+                        id="backgroundColor"
+                        value={backgroundColor}
+                        onChange={(e) => setBackgroundColor(e.target.value)}
+                        className="h-11 w-14 cursor-pointer rounded-lg border border-border p-1"
+                      />
+                      <Input
+                        type="text"
+                        value={backgroundColor}
+                        onChange={(e) => setBackgroundColor(e.target.value)}
+                        className="h-11 font-mono"
+                        pattern="^#[0-9A-Fa-f]{6}$"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <Separator />
+
+                {/* Size */}
+                <div className="space-y-3">
+                  <Label>Taille</Label>
+                  <div className="flex flex-wrap gap-2">
+                    {SIZE_OPTIONS.map((option) => (
+                      <button
+                        key={option.value}
+                        type="button"
+                        onClick={() => setSize(option.value)}
+                        className={`rounded-lg border px-3 py-2 text-sm transition-apple hover:bg-muted ${
+                          size === option.value
+                            ? "border-foreground bg-muted"
+                            : "border-border"
+                        }`}
+                      >
+                        {option.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <Separator />
+
+                {/* Corner Style */}
+                <div className="space-y-3">
+                  <Label>Style des coins</Label>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setCornerStyle("square")}
+                      className={`flex items-center gap-2 rounded-lg border px-4 py-2 text-sm transition-apple hover:bg-muted ${
+                        cornerStyle === "square"
+                          ? "border-foreground bg-muted"
+                          : "border-border"
+                      }`}
+                    >
+                      <div className="h-4 w-4 border-2 border-foreground" />
+                      Carrés
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setCornerStyle("rounded")}
+                      className={`flex items-center gap-2 rounded-lg border px-4 py-2 text-sm transition-apple hover:bg-muted ${
+                        cornerStyle === "rounded"
+                          ? "border-foreground bg-muted"
+                          : "border-border"
+                      }`}
+                    >
+                      <div className="h-4 w-4 rounded border-2 border-foreground" />
+                      Arrondis
+                    </button>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Logo */}
+            <Card className="border-0 shadow-lg">
+              <CardHeader>
+                <CardTitle className="text-lg">Logo (optionnel)</CardTitle>
+              </CardHeader>
+              <CardContent>
                 <div className="flex items-center gap-4">
                   <label className="flex-1 cursor-pointer">
                     <div className="rounded-xl border-2 border-dashed border-border p-6 text-center transition-apple hover:border-foreground/50 hover:bg-muted/50">
@@ -260,12 +449,14 @@ export default function CreatePage() {
                     </Button>
                   )}
                 </div>
-                <p className="text-xs text-muted-foreground">
+                <p className="mt-2 text-xs text-muted-foreground">
                   PNG, JPG ou WebP. Max 5MB. Le logo sera centré sur le QR code.
                 </p>
-              </div>
-            </CardContent>
-            <CardFooter className="flex gap-3">
+              </CardContent>
+            </Card>
+
+            {/* Submit buttons - visible on mobile */}
+            <div className="flex gap-3 lg:hidden">
               <Link href="/dashboard" className="flex-1">
                 <Button variant="outline" className="w-full h-11">
                   Annuler
@@ -300,9 +491,132 @@ export default function CreatePage() {
                   "Créer le QR Code"
                 )}
               </Button>
-            </CardFooter>
+            </div>
           </form>
-        </Card>
+
+          {/* Preview - 2 colonnes, sticky */}
+          <div className="lg:col-span-2">
+            <div className="lg:sticky lg:top-24">
+              <Card className="border-0 shadow-lg">
+                <CardHeader>
+                  <CardTitle className="text-lg">Aperçu en temps réel</CardTitle>
+                </CardHeader>
+                <CardContent className="flex flex-col items-center">
+                  <div
+                    className="rounded-2xl p-6 transition-apple"
+                    style={{ backgroundColor }}
+                  >
+                    <QRCodeSVG
+                      value={previewUrl}
+                      size={200}
+                      level="H"
+                      fgColor={foregroundColor}
+                      bgColor={backgroundColor}
+                      imageSettings={
+                        logoUrl
+                          ? {
+                              src: logoUrl,
+                              height: 40,
+                              width: 40,
+                              excavate: true,
+                            }
+                          : undefined
+                      }
+                      style={{
+                        borderRadius: cornerStyle === "rounded" ? "8px" : "0px",
+                      }}
+                    />
+                  </div>
+
+                  <div className="mt-6 w-full space-y-3">
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-muted-foreground">Taille finale</span>
+                      <span className="font-medium">{size}px</span>
+                    </div>
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-muted-foreground">Style</span>
+                      <span className="font-medium">
+                        {cornerStyle === "rounded" ? "Arrondis" : "Carrés"}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-muted-foreground">Couleur QR</span>
+                      <div className="flex items-center gap-2">
+                        <div
+                          className="h-4 w-4 rounded border"
+                          style={{ backgroundColor: foregroundColor }}
+                        />
+                        <span className="font-mono text-xs">{foregroundColor}</span>
+                      </div>
+                    </div>
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-muted-foreground">Fond</span>
+                      <div className="flex items-center gap-2">
+                        <div
+                          className="h-4 w-4 rounded border"
+                          style={{ backgroundColor }}
+                        />
+                        <span className="font-mono text-xs">{backgroundColor}</span>
+                      </div>
+                    </div>
+                    {logoUrl && (
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-muted-foreground">Logo</span>
+                        <span className="font-medium text-green-600">Ajouté</span>
+                      </div>
+                    )}
+                  </div>
+
+                  <Separator className="my-6" />
+
+                  <p className="text-center text-xs text-muted-foreground mb-4">
+                    L&apos;aperçu montre le rendu avec vos paramètres.
+                    <br />
+                    Le QR code final encodera l&apos;URL de redirection.
+                  </p>
+                </CardContent>
+                <CardFooter className="hidden lg:flex gap-3">
+                  <Link href="/dashboard" className="flex-1">
+                    <Button variant="outline" className="w-full h-11">
+                      Annuler
+                    </Button>
+                  </Link>
+                  <Button
+                    type="submit"
+                    form="create-form"
+                    disabled={loading || uploading}
+                    className="flex-1 h-11"
+                    onClick={handleSubmit}
+                  >
+                    {loading ? (
+                      <span className="flex items-center gap-2">
+                        <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
+                          <circle
+                            className="opacity-25"
+                            cx="12"
+                            cy="12"
+                            r="10"
+                            stroke="currentColor"
+                            strokeWidth="4"
+                            fill="none"
+                          />
+                          <path
+                            className="opacity-75"
+                            fill="currentColor"
+                            d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                          />
+                        </svg>
+                        Création...
+                      </span>
+                    ) : (
+                      "Créer le QR Code"
+                    )}
+                  </Button>
+                </CardFooter>
+              </Card>
+            </div>
+          </div>
+        </div>
       </main>
     </div>
   );
