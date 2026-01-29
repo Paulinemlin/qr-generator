@@ -63,7 +63,7 @@ export async function GET(
 
     const filename = `${qrcode.name.replace(/[^a-zA-Z0-9]/g, "_")}.${extension}`;
 
-    return new NextResponse(buffer, {
+    return new Response(new Uint8Array(buffer), {
       headers: {
         "Content-Type": mimeType,
         "Content-Disposition": `attachment; filename="${filename}"`,
