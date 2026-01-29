@@ -1,5 +1,6 @@
 import QRCode from "qrcode";
 import sharp from "sharp";
+import path from "path";
 
 export interface QRCodeOptions {
   url: string;
@@ -15,6 +16,7 @@ export interface QRCodeOptions {
 export type ExportFormat = "png" | "svg" | "jpeg";
 
 async function getLogoBuffer(logoPath: string): Promise<Buffer> {
+  // Handle HTTP/HTTPS URLs
   if (logoPath.startsWith("http://") || logoPath.startsWith("https://")) {
     const response = await fetch(logoPath);
     if (!response.ok) {
@@ -25,6 +27,14 @@ async function getLogoBuffer(logoPath: string): Promise<Buffer> {
   }
 
   const fs = await import("fs/promises");
+
+  // Handle local uploads (URLs starting with /uploads/)
+  if (logoPath.startsWith("/uploads/") || logoPath.startsWith("/")) {
+    const publicPath = path.join(process.cwd(), "public", logoPath);
+    return fs.readFile(publicPath);
+  }
+
+  // Handle absolute filesystem paths
   return fs.readFile(logoPath);
 }
 

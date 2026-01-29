@@ -22,7 +22,7 @@ model QRCode {
   name            String
   targetUrl       String
   logoUrl         String?
-  qrImageUrl      String?
+  qrImageUrl      String?  @db.Text
   foregroundColor String   @default("#000000")
   backgroundColor String   @default("#ffffff")
   size            Int      @default(400)

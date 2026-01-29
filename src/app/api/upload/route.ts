@@ -1,8 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "@/lib/auth";
 import { put } from "@vercel/blob";
+import { writeFile, mkdir } from "fs/promises";
+import path from "path";
 
 export const dynamic = "force-dynamic";
+
+// Check if Vercel Blob is configured (production)
+const useVercelBlob = !!process.env.BLOB_READ_WRITE_TOKEN;
 
 export async function POST(request: NextRequest) {
   const session = await getServerSession();
@@ -36,13 +41,30 @@ export async function POST(request: NextRequest) {
     }
 
     const ext = file.name.split(".").pop() || "png";
-    const filename = `logos/${session.user.id}-${Date.now()}.${ext}`;
+    const filename = `${session.user.id}-${Date.now()}.${ext}`;
 
-    const blob = await put(filename, file, {
-      access: "public",
-    });
+    let url: string;
 
-    return NextResponse.json({ url: blob.url });
+    if (useVercelBlob) {
+      // Production: Use Vercel Blob
+      const blob = await put(`logos/${filename}`, file, {
+        access: "public",
+      });
+      url = blob.url;
+    } else {
+      // Development: Use local storage
+      const uploadsDir = path.join(process.cwd(), "public", "uploads");
+      await mkdir(uploadsDir, { recursive: true });
+
+      const filepath = path.join(uploadsDir, filename);
+      const bytes = await file.arrayBuffer();
+      const buffer = Buffer.from(bytes);
+      await writeFile(filepath, buffer);
+
+      url = `/uploads/${filename}`;
+    }
+
+    return NextResponse.json({ url });
   } catch (error) {
     console.error("Upload error:", error);
     return NextResponse.json(
