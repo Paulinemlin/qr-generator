@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
+export const fetchCache = "force-no-store";
 
 export async function GET(
   request: NextRequest,
@@ -36,11 +37,16 @@ export async function GET(
       console.error("Error recording scan:", scanError);
     }
 
-    // Create redirect response with no-cache headers
-    const response = NextResponse.redirect(qrcode.targetUrl, { status: 307 });
-    response.headers.set("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
+    // Add cache-busting parameter to target URL
+    const targetUrl = new URL(qrcode.targetUrl);
+    targetUrl.searchParams.set("_t", Date.now().toString());
+
+    // Use 302 (temporary) redirect instead of 307 to avoid caching
+    const response = NextResponse.redirect(targetUrl.toString(), { status: 302 });
+    response.headers.set("Cache-Control", "private, no-cache, no-store, max-age=0, must-revalidate");
     response.headers.set("Pragma", "no-cache");
     response.headers.set("Expires", "0");
+    response.headers.set("Surrogate-Control", "no-store");
 
     return response;
   } catch (error) {
