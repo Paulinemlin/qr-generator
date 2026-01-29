@@ -8,6 +8,22 @@ interface GenerateQROptions {
   logoSizePercent?: number;
 }
 
+async function getLogoBuffer(logoPath: string): Promise<Buffer> {
+  // If it's a URL, fetch it
+  if (logoPath.startsWith("http://") || logoPath.startsWith("https://")) {
+    const response = await fetch(logoPath);
+    if (!response.ok) {
+      throw new Error(`Failed to fetch logo: ${response.status}`);
+    }
+    const arrayBuffer = await response.arrayBuffer();
+    return Buffer.from(arrayBuffer);
+  }
+
+  // Otherwise, read from local file system (for local development)
+  const fs = await import("fs/promises");
+  return fs.readFile(logoPath);
+}
+
 export async function generateQRCode({
   url,
   logoPath,
@@ -35,8 +51,11 @@ export async function generateQRCode({
   const logoPosition = Math.floor((size - totalLogoSize) / 2);
 
   try {
+    // Get the logo buffer (from URL or file path)
+    const logoBuffer = await getLogoBuffer(logoPath);
+
     // Resize the logo
-    const resizedLogo = await sharp(logoPath)
+    const resizedLogo = await sharp(logoBuffer)
       .resize(logoSize, logoSize, {
         fit: "contain",
         background: { r: 255, g: 255, b: 255, alpha: 1 },

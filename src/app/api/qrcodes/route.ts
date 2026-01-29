@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { generateQRCodeDataURL } from "@/lib/qr-generator";
-import path from "path";
 
 export const dynamic = "force-dynamic";
 
@@ -55,14 +54,10 @@ export async function POST(request: NextRequest) {
     const baseUrl = process.env.NEXTAUTH_URL || "http://localhost:3000";
     const redirectUrl = `${baseUrl}/r/${qrcode.id}`;
 
-    let logoPath: string | undefined;
-    if (logoUrl) {
-      logoPath = path.join(process.cwd(), "public", logoUrl);
-    }
-
+    // logoUrl is now a full URL from Vercel Blob
     const qrImageUrl = await generateQRCodeDataURL({
       url: redirectUrl,
-      logoPath,
+      logoPath: logoUrl || undefined,
     });
 
     const updatedQrcode = await prisma.qRCode.update({

@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "@/lib/auth";
-import { writeFile } from "fs/promises";
-import path from "path";
+import { put } from "@vercel/blob";
 
 export const dynamic = "force-dynamic";
 
@@ -36,16 +35,14 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const bytes = await file.arrayBuffer();
-    const buffer = Buffer.from(bytes);
-
     const ext = file.name.split(".").pop() || "png";
-    const filename = `${session.user.id}-${Date.now()}.${ext}`;
-    const uploadPath = path.join(process.cwd(), "public", "uploads", filename);
+    const filename = `logos/${session.user.id}-${Date.now()}.${ext}`;
 
-    await writeFile(uploadPath, buffer);
+    const blob = await put(filename, file, {
+      access: "public",
+    });
 
-    return NextResponse.json({ url: `/uploads/${filename}` });
+    return NextResponse.json({ url: blob.url });
   } catch (error) {
     console.error("Upload error:", error);
     return NextResponse.json(
