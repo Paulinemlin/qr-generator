@@ -33,7 +33,15 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const { name, targetUrl, logoUrl } = await request.json();
+    const {
+      name,
+      targetUrl,
+      logoUrl,
+      foregroundColor = "#000000",
+      backgroundColor = "#ffffff",
+      size = 400,
+      cornerStyle = "square",
+    } = await request.json();
 
     if (!name || !targetUrl) {
       return NextResponse.json(
@@ -42,11 +50,30 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Validate color format
+    const colorRegex = /^#[0-9A-Fa-f]{6}$/;
+    if (!colorRegex.test(foregroundColor) || !colorRegex.test(backgroundColor)) {
+      return NextResponse.json(
+        { error: "Format de couleur invalide" },
+        { status: 400 }
+      );
+    }
+
+    // Validate size
+    const validSize = Math.min(Math.max(Number(size) || 400, 100), 2000);
+
+    // Validate corner style
+    const validCornerStyle = cornerStyle === "rounded" ? "rounded" : "square";
+
     const qrcode = await prisma.qRCode.create({
       data: {
         name,
         targetUrl,
         logoUrl,
+        foregroundColor,
+        backgroundColor,
+        size: validSize,
+        cornerStyle: validCornerStyle,
         userId: session.user.id,
       },
     });
@@ -54,10 +81,13 @@ export async function POST(request: NextRequest) {
     const baseUrl = process.env.NEXTAUTH_URL || "http://localhost:3000";
     const redirectUrl = `${baseUrl}/r/${qrcode.id}`;
 
-    // logoUrl is now a full URL from Vercel Blob
     const qrImageUrl = await generateQRCodeDataURL({
       url: redirectUrl,
       logoPath: logoUrl || undefined,
+      size: validSize,
+      foregroundColor,
+      backgroundColor,
+      cornerStyle: validCornerStyle as "square" | "rounded",
     });
 
     const updatedQrcode = await prisma.qRCode.update({

@@ -18,15 +18,19 @@ model User {
 }
 
 model QRCode {
-  id          String   @id @default(cuid())
-  name        String
-  targetUrl   String
-  logoUrl     String?
-  qrImageUrl  String?  @db.Text
-  userId      String
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  scans       Scan[]
-  createdAt   DateTime @default(now())
+  id              String   @id @default(cuid())
+  name            String
+  targetUrl       String
+  logoUrl         String?
+  qrImageUrl      String?  @db.Text
+  foregroundColor String   @default("#000000")
+  backgroundColor String   @default("#ffffff")
+  size            Int      @default(400)
+  cornerStyle     String   @default("square")
+  userId          String
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  scans           Scan[]
+  createdAt       DateTime @default(now())
 }
 
 model Scan {
