@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
 export async function GET(
   request: NextRequest,
@@ -33,10 +34,15 @@ export async function GET(
       });
     } catch (scanError) {
       console.error("Error recording scan:", scanError);
-      // Continue with redirect even if scan recording fails
     }
 
-    return NextResponse.redirect(qrcode.targetUrl);
+    // Create redirect response with no-cache headers
+    const response = NextResponse.redirect(qrcode.targetUrl, { status: 307 });
+    response.headers.set("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
+    response.headers.set("Pragma", "no-cache");
+    response.headers.set("Expires", "0");
+
+    return response;
   } catch (error) {
     console.error("Error in redirect route:", error);
     return NextResponse.redirect(new URL("/", request.url));
