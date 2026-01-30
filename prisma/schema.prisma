@@ -8,29 +8,97 @@ datasource db {
   directUrl = env("DATABASE_URL_UNPOOLED")
 }
 
+enum Plan {
+  FREE
+  PRO
+  BUSINESS
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  CANCELED
+  PAST_DUE
+  TRIALING
+}
+
 model User {
-  id        String   @id @default(cuid())
-  email     String   @unique
-  password  String
-  name      String?
-  qrcodes   QRCode[]
-  createdAt DateTime @default(now())
+  id                   String              @id @default(cuid())
+  email                String              @unique
+  password             String
+  name                 String?
+  plan                 Plan                @default(FREE)
+  stripeCustomerId     String?             @unique
+  stripeSubscriptionId String?             @unique
+  subscriptionStatus   SubscriptionStatus?
+  subscriptionEndDate  DateTime?
+  qrcodes              QRCode[]
+  apiKeys              ApiKey[]
+  customDomains        CustomDomain[]
+  shortLinks           ShortLink[]
+  ownedTeams           Team[]              @relation("TeamOwner")
+  teamMemberships      TeamMember[]
+  createdAt            DateTime            @default(now())
+  updatedAt            DateTime            @default(now()) @updatedAt
+}
+
+// Modele pour les domaines personnalises (BUSINESS uniquement)
+model CustomDomain {
+  id                String    @id @default(cuid())
+  domain            String    @unique
+  userId            String
+  user              User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  verified          Boolean   @default(false)
+  verificationToken String    @unique @default(cuid())
+  verifiedAt        DateTime?
+  qrcodes           QRCode[]
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @default(now()) @updatedAt
+}
+
+model ApiKey {
+  id         String    @id @default(cuid())
+  key        String    @unique
+  name       String
+  userId     String
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt  DateTime  @default(now())
+  lastUsedAt DateTime?
+  expiresAt  DateTime?
 }
 
 model QRCode {
-  id              String   @id @default(cuid())
+  id              String    @id @default(cuid())
   name            String
+  type            String    @default("url")
   targetUrl       String
+  qrContent       String?   @db.Text
   logoUrl         String?
-  qrImageUrl      String?  @db.Text
-  foregroundColor String   @default("#000000")
-  backgroundColor String   @default("#ffffff")
-  size            Int      @default(400)
-  cornerStyle     String   @default("square")
+  qrImageUrl      String?   @db.Text
+  foregroundColor String    @default("#000000")
+  backgroundColor String    @default("#ffffff")
+  size            Int       @default(400)
+  cornerStyle     String    @default("square")
   userId          String
-  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  teamId          String?
+  team            Team?     @relation("TeamQRCodes", fields: [teamId], references: [id], onDelete: SetNull)
   scans           Scan[]
-  createdAt       DateTime @default(now())
+  abTests         ABTest[]
+  createdAt       DateTime  @default(now())
+  // Champs d'expiration (PRO/BUSINESS)
+  expiresAt       DateTime?
+  maxScans        Int?
+  isActive        Boolean   @default(true)
+  // Protection par mot de passe (PRO/BUSINESS)
+  passwordHash        String?
+  isPasswordProtected Boolean   @default(false)
+  // Domaine personnalise (BUSINESS uniquement)
+  shortCode           String?   @unique
+  customDomainId      String?
+  customDomain        CustomDomain? @relation(fields: [customDomainId], references: [id], onDelete: SetNull)
+
+  @@index([teamId])
+  @@index([shortCode])
 }
 
 model Scan {
@@ -40,5 +108,105 @@ model Scan {
   userAgent String?
   ip        String?
   country   String?
+  variantId String?  // ID de la variante A/B test servie
   scannedAt DateTime @default(now())
+}
+
+// Modele pour les tests A/B (PRO/BUSINESS)
+model ABTest {
+  id        String   @id @default(cuid())
+  qrcodeId  String   @unique
+  qrcode    QRCode   @relation(fields: [qrcodeId], references: [id], onDelete: Cascade)
+  variants  Json     // [{id, url, weight, name}]
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
+}
+
+// Modeles pour la gestion des equipes (BUSINESS uniquement)
+enum TeamRole {
+  OWNER
+  ADMIN
+  MEMBER
+  VIEWER
+}
+
+model Team {
+  id          String           @id @default(cuid())
+  name        String
+  ownerId     String
+  owner       User             @relation("TeamOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  members     TeamMember[]
+  qrcodes     QRCode[]         @relation("TeamQRCodes")
+  invitations TeamInvitation[]
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @default(now()) @updatedAt
+}
+
+model TeamMember {
+  id        String   @id @default(cuid())
+  teamId    String
+  team      Team     @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role      TeamRole @default(MEMBER)
+  createdAt DateTime @default(now())
+
+  @@unique([teamId, userId])
+}
+
+model TeamInvitation {
+  id        String   @id @default(cuid())
+  teamId    String
+  team      Team     @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  email     String
+  token     String   @unique
+  role      TeamRole @default(MEMBER)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([email])
+  @@index([token])
+}
+
+// Raccourcisseur de liens
+model ShortLink {
+  id          String      @id @default(cuid())
+  shortCode   String      @unique
+  targetUrl   String
+  title       String?
+  userId      String
+  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  clicks      LinkClick[]
+  // Options avancees (PRO/BUSINESS)
+  expiresAt   DateTime?
+  maxClicks   Int?
+  isActive    Boolean     @default(true)
+  // Protection par mot de passe (PRO/BUSINESS)
+  passwordHash        String?
+  isPasswordProtected Boolean   @default(false)
+  // Domaine personnalise (BUSINESS uniquement)
+  customDomainId      String?
+  // UTM tracking
+  utmSource   String?
+  utmMedium   String?
+  utmCampaign String?
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @default(now()) @updatedAt
+
+  @@index([shortCode])
+  @@index([userId])
+}
+
+model LinkClick {
+  id          String    @id @default(cuid())
+  shortLinkId String
+  shortLink   ShortLink @relation(fields: [shortLinkId], references: [id], onDelete: Cascade)
+  userAgent   String?
+  ip          String?
+  country     String?
+  referer     String?
+  clickedAt   DateTime  @default(now())
+
+  @@index([shortLinkId])
 }

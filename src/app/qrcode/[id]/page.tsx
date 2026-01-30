@@ -4,12 +4,15 @@ import { useSession } from "next-auth/react";
 import { useRouter, useParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import Image from "next/image";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
+import { AnalyticsSection } from "@/components/analytics";
+import { QRInsights } from "@/components/qr-insights";
+import { canViewAnalytics, PlanType } from "@/lib/plans";
 
 interface Scan {
   id: string;
@@ -29,9 +32,16 @@ interface QRCodeDetail {
   size: number;
   cornerStyle: string;
   createdAt: string;
+  expiresAt: string | null;
+  maxScans: number | null;
+  isActive: boolean;
+  isPasswordProtected: boolean;
   scans: Scan[];
   _count: {
     scans: number;
+  };
+  user?: {
+    plan: PlanType;
   };
 }
 
@@ -59,6 +69,14 @@ export default function QRCodeDetailPage() {
   const [exportFormat, setExportFormat] = useState("png");
   const [exportSize, setExportSize] = useState(400);
   const [downloading, setDownloading] = useState(false);
+  const [planUtilisateur, setPlanUtilisateur] = useState<PlanType>("FREE");
+  // Gestion du mot de passe
+  const [showPasswordForm, setShowPasswordForm] = useState(false);
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [passwordError, setPasswordError] = useState("");
+  const [passwordSuccess, setPasswordSuccess] = useState("");
+  const [savingPassword, setSavingPassword] = useState(false);
 
   useEffect(() => {
     if (status === "unauthenticated") {
@@ -69,6 +87,7 @@ export default function QRCodeDetailPage() {
   useEffect(() => {
     if (session && params.id) {
       fetchQRCode();
+      fetchPlanUtilisateur();
     }
   }, [session, params.id]);
 
@@ -87,6 +106,18 @@ export default function QRCodeDetailPage() {
       router.push("/dashboard");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchPlanUtilisateur = async () => {
+    try {
+      const res = await fetch("/api/user/plan", { credentials: "include" });
+      if (res.ok) {
+        const data = await res.json();
+        setPlanUtilisateur(data.plan || "FREE");
+      }
+    } catch (error) {
+      console.error("Erreur lors de la recuperation du plan:", error);
     }
   };
 
@@ -183,6 +214,58 @@ export default function QRCodeDetailPage() {
     return "Desktop";
   };
 
+  const handlePasswordUpdate = async (action: "set" | "remove") => {
+    setPasswordError("");
+    setPasswordSuccess("");
+
+    if (action === "set") {
+      if (newPassword.length < 4) {
+        setPasswordError("Le mot de passe doit contenir au moins 4 caracteres.");
+        return;
+      }
+      if (newPassword !== confirmPassword) {
+        setPasswordError("Les mots de passe ne correspondent pas.");
+        return;
+      }
+    }
+
+    setSavingPassword(true);
+    try {
+      const res = await fetch(`/api/qrcodes/${params.id}/password`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action,
+          password: action === "set" ? newPassword : undefined,
+        }),
+        credentials: "include",
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        setPasswordError(data.error || "Erreur lors de la mise a jour");
+        return;
+      }
+
+      setPasswordSuccess(
+        action === "set"
+          ? "Mot de passe configure avec succes"
+          : "Protection par mot de passe desactivee"
+      );
+      setNewPassword("");
+      setConfirmPassword("");
+      setShowPasswordForm(false);
+      // Rafraichir les donnees du QR code
+      fetchQRCode();
+    } catch (error) {
+      console.error("Erreur:", error);
+      setPasswordError("Erreur de connexion");
+    } finally {
+      setSavingPassword(false);
+    }
+  };
+
   if (status === "loading" || loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -255,15 +338,20 @@ export default function QRCodeDetailPage() {
               <CardContent className="space-y-6">
                 {qrcode.qrImageUrl && (
                   <div
-                    className="flex justify-center rounded-xl p-6"
-                    style={{ backgroundColor: qrcode.backgroundColor }}
+                    className="flex justify-center overflow-x-auto p-8"
+                    style={{ backgroundColor: "#FFFFFF" }}
                   >
-                    <Image
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
                       src={qrcode.qrImageUrl}
                       alt={qrcode.name}
-                      width={280}
-                      height={280}
-                      className="rounded-lg"
+                      style={{
+                        width: `${qrcode.size || 400}px`,
+                        height: `${qrcode.size || 400}px`,
+                        minWidth: `${qrcode.size || 400}px`,
+                        minHeight: `${qrcode.size || 400}px`,
+                        imageRendering: "pixelated",
+                      }}
                     />
                   </div>
                 )}
@@ -329,7 +417,7 @@ export default function QRCodeDetailPage() {
 
                   <div className="grid grid-cols-2 gap-4 text-sm">
                     <div>
-                      <p className="text-muted-foreground">Créé le</p>
+                      <p className="text-muted-foreground">Cree le</p>
                       <p>{formatDate(qrcode.createdAt)}</p>
                     </div>
                     <div>
@@ -351,14 +439,260 @@ export default function QRCodeDetailPage() {
                       />
                     </div>
                   </div>
+
+                  {/* Informations d'expiration */}
+                  {(qrcode.expiresAt || qrcode.maxScans) && (
+                    <>
+                      <Separator />
+                      <div className="space-y-2">
+                        <div className="flex items-center gap-2">
+                          <Badge variant={qrcode.isActive ? "default" : "destructive"}>
+                            {qrcode.isActive ? "Actif" : "Expire"}
+                          </Badge>
+                        </div>
+                        <div className="grid grid-cols-2 gap-4 text-sm">
+                          {qrcode.expiresAt && (
+                            <div>
+                              <p className="text-muted-foreground">Expire le</p>
+                              <p>{formatDate(qrcode.expiresAt)}</p>
+                            </div>
+                          )}
+                          {qrcode.maxScans && (
+                            <div>
+                              <p className="text-muted-foreground">Scans restants</p>
+                              <p>{Math.max(0, qrcode.maxScans - qrcode._count.scans)} / {qrcode.maxScans}</p>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </>
+                  )}
                 </div>
               </CardContent>
             </Card>
 
+            {/* Bouton A/B Test */}
+            {(planUtilisateur === "PRO" || planUtilisateur === "BUSINESS") && (
+              <Card className="border-0 shadow-lg">
+                <CardHeader>
+                  <CardTitle className="text-lg flex items-center gap-2">
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="20"
+                      height="20"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
+                      <path d="M10 2h4" />
+                      <path d="M4 6h16" />
+                      <path d="M6 6v14c0 1.1.9 2 2 2h8a2 2 0 0 0 2-2V6" />
+                      <path d="M8 10h8" />
+                      <path d="M8 14h8" />
+                      <path d="M8 18h8" />
+                    </svg>
+                    Test A/B
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-sm text-muted-foreground mb-4">
+                    Testez differentes URLs pour optimiser vos conversions.
+                  </p>
+                  <Link href={`/qrcode/${qrcode.id}/ab-test`}>
+                    <Button className="w-full">
+                      Configurer le test A/B
+                    </Button>
+                  </Link>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Protection par mot de passe (PRO/BUSINESS) */}
+            {(planUtilisateur === "PRO" || planUtilisateur === "BUSINESS") && (
+              <Card className="border-0 shadow-lg">
+                <CardHeader>
+                  <CardTitle className="text-lg flex items-center gap-2">
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="20"
+                      height="20"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
+                      <rect width="18" height="11" x="3" y="11" rx="2" ry="2" />
+                      <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                    </svg>
+                    Protection par mot de passe
+                    {qrcode.isPasswordProtected && (
+                      <Badge variant="default" className="ml-2">Active</Badge>
+                    )}
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {passwordError && (
+                    <div className="rounded-lg bg-destructive/10 p-3 text-sm text-destructive">
+                      {passwordError}
+                    </div>
+                  )}
+                  {passwordSuccess && (
+                    <div className="rounded-lg bg-green-100 p-3 text-sm text-green-800">
+                      {passwordSuccess}
+                    </div>
+                  )}
+
+                  {qrcode.isPasswordProtected ? (
+                    <div className="space-y-4">
+                      <p className="text-sm text-muted-foreground">
+                        Ce QR code est protege par un mot de passe. Les utilisateurs devront saisir le mot de passe pour acceder au contenu.
+                      </p>
+
+                      {showPasswordForm ? (
+                        <div className="space-y-4">
+                          <div className="space-y-2">
+                            <Label htmlFor="newPassword">Nouveau mot de passe</Label>
+                            <Input
+                              id="newPassword"
+                              type="password"
+                              value={newPassword}
+                              onChange={(e) => setNewPassword(e.target.value)}
+                              placeholder="Nouveau mot de passe"
+                              className="h-11"
+                              minLength={4}
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label htmlFor="confirmPassword">Confirmer le mot de passe</Label>
+                            <Input
+                              id="confirmPassword"
+                              type="password"
+                              value={confirmPassword}
+                              onChange={(e) => setConfirmPassword(e.target.value)}
+                              placeholder="Confirmer le mot de passe"
+                              className="h-11"
+                              minLength={4}
+                            />
+                          </div>
+                          <div className="flex gap-2">
+                            <Button
+                              variant="outline"
+                              className="flex-1"
+                              onClick={() => {
+                                setShowPasswordForm(false);
+                                setNewPassword("");
+                                setConfirmPassword("");
+                                setPasswordError("");
+                              }}
+                            >
+                              Annuler
+                            </Button>
+                            <Button
+                              className="flex-1"
+                              disabled={savingPassword || !newPassword || newPassword !== confirmPassword}
+                              onClick={() => handlePasswordUpdate("set")}
+                            >
+                              {savingPassword ? "Enregistrement..." : "Changer"}
+                            </Button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="flex gap-2">
+                          <Button
+                            variant="outline"
+                            className="flex-1"
+                            onClick={() => setShowPasswordForm(true)}
+                          >
+                            Changer le mot de passe
+                          </Button>
+                          <Button
+                            variant="destructive"
+                            className="flex-1"
+                            disabled={savingPassword}
+                            onClick={() => handlePasswordUpdate("remove")}
+                          >
+                            {savingPassword ? "Suppression..." : "Supprimer la protection"}
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      <p className="text-sm text-muted-foreground">
+                        Protegez l&apos;acces a votre QR code avec un mot de passe. Les utilisateurs devront saisir ce mot de passe pour acceder au contenu.
+                      </p>
+
+                      {showPasswordForm ? (
+                        <div className="space-y-4">
+                          <div className="space-y-2">
+                            <Label htmlFor="newPassword">Mot de passe</Label>
+                            <Input
+                              id="newPassword"
+                              type="password"
+                              value={newPassword}
+                              onChange={(e) => setNewPassword(e.target.value)}
+                              placeholder="Saisir un mot de passe"
+                              className="h-11"
+                              minLength={4}
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label htmlFor="confirmPassword">Confirmer le mot de passe</Label>
+                            <Input
+                              id="confirmPassword"
+                              type="password"
+                              value={confirmPassword}
+                              onChange={(e) => setConfirmPassword(e.target.value)}
+                              placeholder="Confirmer le mot de passe"
+                              className="h-11"
+                              minLength={4}
+                            />
+                          </div>
+                          <div className="flex gap-2">
+                            <Button
+                              variant="outline"
+                              className="flex-1"
+                              onClick={() => {
+                                setShowPasswordForm(false);
+                                setNewPassword("");
+                                setConfirmPassword("");
+                                setPasswordError("");
+                              }}
+                            >
+                              Annuler
+                            </Button>
+                            <Button
+                              className="flex-1"
+                              disabled={savingPassword || !newPassword || newPassword !== confirmPassword || newPassword.length < 4}
+                              onClick={() => handlePasswordUpdate("set")}
+                            >
+                              {savingPassword ? "Activation..." : "Activer la protection"}
+                            </Button>
+                          </div>
+                        </div>
+                      ) : (
+                        <Button
+                          className="w-full"
+                          onClick={() => setShowPasswordForm(true)}
+                        >
+                          Ajouter un mot de passe
+                        </Button>
+                      )}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            )}
+
             {/* Export Card */}
             <Card className="border-0 shadow-lg">
               <CardHeader>
-                <CardTitle className="text-lg">Télécharger</CardTitle>
+                <CardTitle className="text-lg">Telecharger</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="space-y-3">
@@ -455,10 +789,10 @@ export default function QRCodeDetailPage() {
             </Card>
           </div>
 
-          {/* Stats Card */}
+          {/* Stats Card - Derniers scans */}
           <Card className="border-0 shadow-lg h-fit">
             <CardHeader className="flex flex-row items-center justify-between">
-              <CardTitle className="text-xl">Statistiques</CardTitle>
+              <CardTitle className="text-xl">Derniers scans</CardTitle>
               <Badge variant="secondary" className="text-base px-4 py-1">
                 {qrcode._count.scans} scans
               </Badge>
@@ -491,8 +825,8 @@ export default function QRCodeDetailPage() {
                 </div>
               ) : (
                 <div className="space-y-4">
-                  <p className="text-sm text-muted-foreground">Derniers scans</p>
-                  <div className="max-h-[500px] space-y-2 overflow-y-auto pr-2">
+                  <p className="text-sm text-muted-foreground">Historique recent</p>
+                  <div className="max-h-[400px] space-y-2 overflow-y-auto pr-2">
                     {qrcode.scans.map((scan) => (
                       <div
                         key={scan.id}
@@ -523,6 +857,22 @@ export default function QRCodeDetailPage() {
               )}
             </CardContent>
           </Card>
+        </div>
+
+        {/* Section Insights - pleine largeur */}
+        <div className="mt-8">
+          <QRInsights
+            qrcodeId={qrcode.id}
+            peutVoirInsights={canViewAnalytics(planUtilisateur)}
+          />
+        </div>
+
+        {/* Section Analytics detaillees - pleine largeur */}
+        <div className="mt-8">
+          <AnalyticsSection
+            qrcodeId={qrcode.id}
+            peutVoirAnalytics={canViewAnalytics(planUtilisateur)}
+          />
         </div>
       </main>
     </div>
