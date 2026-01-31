@@ -407,7 +407,7 @@ export default function Home() {
                     <Icons.ArrowRight />
                   </Button>
                 </Link>
-                <Link href="/demo">
+                <Link href="/#demo">
                   <Button
                     variant="outline"
                     size="lg"
@@ -637,7 +637,7 @@ export default function Home() {
         </section>
 
         {/* Product Demo Preview */}
-        <section className="py-24 md:py-32">
+        <section id="demo" className="py-24 md:py-32">
           <div className="mx-auto max-w-6xl px-6">
             <div className="mx-auto max-w-2xl text-center mb-16">
               <Badge variant="secondary" className="mb-4">Interface</Badge>

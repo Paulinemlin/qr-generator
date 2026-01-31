@@ -685,7 +685,7 @@ function PricingContent() {
                   Creer mon premier QR code
                 </Button>
               </Link>
-              <Link href="/demo">
+              <Link href="/#demo">
                 <Button variant="outline" size="lg" className="h-12 px-8">
                   Voir la demo
                 </Button>
