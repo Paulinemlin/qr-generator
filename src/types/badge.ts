@@ -84,12 +84,12 @@ export const LOGO_POSITIONS: { value: LogoPosition; label: string; icon: string 
   { value: "bottom-right", label: "Bas droite", icon: "↘" },
 ];
 
-// Font presets
+// Font presets - using standard fonts available in server-side rendering
 export const FONT_PRESETS: { value: BadgeFont; label: string; family: string }[] = [
-  { value: "sans", label: "Sans-serif", family: "system-ui, -apple-system, sans-serif" },
-  { value: "serif", label: "Serif", family: "Georgia, 'Times New Roman', serif" },
-  { value: "mono", label: "Mono", family: "'SF Mono', 'Fira Code', monospace" },
-  { value: "display", label: "Display", family: "'Playfair Display', Georgia, serif" },
+  { value: "sans", label: "Sans-serif", family: "Arial, Helvetica, sans-serif" },
+  { value: "serif", label: "Serif", family: "Georgia, Times New Roman, serif" },
+  { value: "mono", label: "Mono", family: "Courier New, Courier, monospace" },
+  { value: "display", label: "Display", family: "Georgia, serif" },
 ];
 
 // Border width presets

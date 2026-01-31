@@ -219,13 +219,14 @@ function createBadgeTextSVG(
     );
   }
 
-  // Name and company text
+  // Name and company text - apply font-family directly for server-side rendering
   svgContent += `
     <text
       x="${textX}"
       y="${textY}"
       text-anchor="middle"
-      class="name"
+      font-family="${fontFamily}"
+      font-weight="600"
       font-size="${nameFontSize}"
       fill="${textColor}">
       ${escapeXml(fullName)}
@@ -234,7 +235,8 @@ function createBadgeTextSVG(
       x="${textX}"
       y="${textY + nameFontSize + 16 * scaleFactor}"
       text-anchor="middle"
-      class="company"
+      font-family="${fontFamily}"
+      font-weight="400"
       font-size="${companyFontSize}"
       fill="${textColor}"
       opacity="0.7">
@@ -249,7 +251,8 @@ function createBadgeTextSVG(
         x="${width / 2}"
         y="${height - effectiveBorderWidth - 20 * scaleFactor}"
         text-anchor="middle"
-        class="event"
+        font-family="${fontFamily}"
+        font-weight="400"
         font-size="${eventFontSize}"
         fill="${textColor}"
         opacity="0.5">
@@ -260,16 +263,6 @@ function createBadgeTextSVG(
 
   return `
     <svg width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg">
-      <style>
-        .name {
-          font-family: ${fontFamily};
-          font-weight: 600;
-        }
-        .company, .event {
-          font-family: ${fontFamily};
-          font-weight: 400;
-        }
-      </style>
       ${svgContent}
     </svg>
   `;
