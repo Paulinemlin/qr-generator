@@ -30,7 +30,7 @@ export async function PUT(
 
     const { id } = await params;
     const body = await request.json();
-    const { name, description, priceInCents, imageUrl, isAvailable, categoryId, tagIds } = body;
+    const { name, description, priceInCents, imageUrl, isAvailable, categoryId, tagIds, allergens } = body;
 
     // Verify item belongs to restaurant
     const item = await prisma.menuItem.findFirst({
@@ -99,6 +99,11 @@ export async function PUT(
         );
       }
       updateData.categoryId = categoryId;
+    }
+
+    // Handle allergens
+    if (allergens !== undefined && Array.isArray(allergens)) {
+      updateData.allergens = allergens;
     }
 
     // Handle tag updates

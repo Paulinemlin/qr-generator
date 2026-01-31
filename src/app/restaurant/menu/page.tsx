@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import {
   Loader2,
   Plus,
@@ -17,6 +18,7 @@ import {
   Tag,
   X,
   Palette,
+  ImageIcon,
 } from "lucide-react";
 import { formatPrice } from "@/lib/cart";
 
@@ -34,8 +36,39 @@ interface MenuItem {
   imageUrl: string | null;
   isAvailable: boolean;
   sortOrder: number;
+  allergens?: string[];
   tags?: MenuTag[];
 }
+
+// Liste des allergènes réglementaires (14 allergènes majeurs EU)
+const ALLERGENS = [
+  { id: "gluten", label: "Gluten", icon: "🌾" },
+  { id: "crustaces", label: "Crustacés", icon: "🦐" },
+  { id: "oeufs", label: "Œufs", icon: "🥚" },
+  { id: "poisson", label: "Poisson", icon: "🐟" },
+  { id: "arachides", label: "Arachides", icon: "🥜" },
+  { id: "soja", label: "Soja", icon: "🫘" },
+  { id: "lait", label: "Lait", icon: "🥛" },
+  { id: "fruits-coques", label: "Fruits à coque", icon: "🌰" },
+  { id: "celeri", label: "Céleri", icon: "🥬" },
+  { id: "moutarde", label: "Moutarde", icon: "🟡" },
+  { id: "sesame", label: "Sésame", icon: "⚪" },
+  { id: "sulfites", label: "Sulfites", icon: "🍷" },
+  { id: "lupin", label: "Lupin", icon: "🌸" },
+  { id: "mollusques", label: "Mollusques", icon: "🦪" },
+];
+
+// Régimes alimentaires
+const DIETS = [
+  { id: "vegetarien", label: "Végétarien", icon: "🥬", color: "bg-green-100 text-green-700" },
+  { id: "vegan", label: "Végan", icon: "🌱", color: "bg-emerald-100 text-emerald-700" },
+  { id: "sans-gluten", label: "Sans gluten", icon: "🌾", color: "bg-amber-100 text-amber-700" },
+  { id: "halal", label: "Halal", icon: "☪️", color: "bg-blue-100 text-blue-700" },
+  { id: "casher", label: "Casher", icon: "✡️", color: "bg-indigo-100 text-indigo-700" },
+  { id: "bio", label: "Bio", icon: "🌿", color: "bg-lime-100 text-lime-700" },
+  { id: "fait-maison", label: "Fait maison", icon: "👨‍🍳", color: "bg-orange-100 text-orange-700" },
+  { id: "epice", label: "Épicé", icon: "🌶️", color: "bg-red-100 text-red-700" },
+];
 
 interface Category {
   id: string;
@@ -71,6 +104,15 @@ export default function MenuPage() {
     new Set()
   );
 
+  // Drag state
+  const [draggedCategory, setDraggedCategory] = useState<string | null>(null);
+  const [draggedItem, setDraggedItem] = useState<{
+    id: string;
+    categoryId: string;
+  } | null>(null);
+  const [dragOverCategory, setDragOverCategory] = useState<string | null>(null);
+  const [dragOverItem, setDragOverItem] = useState<string | null>(null);
+
   // Modal states
   const [showCategoryModal, setShowCategoryModal] = useState(false);
   const [showItemModal, setShowItemModal] = useState(false);
@@ -88,9 +130,12 @@ export default function MenuPage() {
   const [itemDescription, setItemDescription] = useState("");
   const [itemPrice, setItemPrice] = useState("");
   const [itemCategoryId, setItemCategoryId] = useState("");
+  const [itemImageUrl, setItemImageUrl] = useState<string | null>(null);
   const [itemTagIds, setItemTagIds] = useState<string[]>([]);
+  const [itemAllergens, setItemAllergens] = useState<string[]>([]);
   const [newTagName, setNewTagName] = useState("");
   const [saving, setSaving] = useState(false);
+  const [uploadingImage, setUploadingImage] = useState(false);
 
   // Import states
   const [importFile, setImportFile] = useState<File | null>(null);
@@ -150,6 +195,162 @@ export default function MenuPage() {
     });
   }
 
+  // === DRAG & DROP HANDLERS ===
+
+  // Category drag handlers
+  function handleCategoryDragStart(e: React.DragEvent, categoryId: string) {
+    e.dataTransfer.effectAllowed = "move";
+    e.dataTransfer.setData("type", "category");
+    e.dataTransfer.setData("categoryId", categoryId);
+    setDraggedCategory(categoryId);
+  }
+
+  function handleCategoryDragOver(e: React.DragEvent, categoryId: string) {
+    e.preventDefault();
+    if (draggedCategory && draggedCategory !== categoryId) {
+      setDragOverCategory(categoryId);
+    }
+  }
+
+  function handleCategoryDragLeave() {
+    setDragOverCategory(null);
+  }
+
+  async function handleCategoryDrop(e: React.DragEvent, targetCategoryId: string) {
+    e.preventDefault();
+    setDragOverCategory(null);
+
+    if (!draggedCategory || draggedCategory === targetCategoryId) {
+      setDraggedCategory(null);
+      return;
+    }
+
+    // Reorder categories
+    const newCategories = [...categories];
+    const draggedIndex = newCategories.findIndex((c) => c.id === draggedCategory);
+    const targetIndex = newCategories.findIndex((c) => c.id === targetCategoryId);
+
+    if (draggedIndex !== -1 && targetIndex !== -1) {
+      const [removed] = newCategories.splice(draggedIndex, 1);
+      newCategories.splice(targetIndex, 0, removed);
+      setCategories(newCategories);
+
+      // Update server
+      try {
+        await fetch("/api/restaurant/categories", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            categoryIds: newCategories.map((c) => c.id),
+          }),
+        });
+      } catch (error) {
+        console.error("Error reordering categories:", error);
+        fetchCategories();
+      }
+    }
+
+    setDraggedCategory(null);
+  }
+
+  function handleCategoryDragEnd() {
+    setDraggedCategory(null);
+    setDragOverCategory(null);
+  }
+
+  // Item drag handlers
+  function handleItemDragStart(
+    e: React.DragEvent,
+    itemId: string,
+    categoryId: string
+  ) {
+    e.stopPropagation();
+    e.dataTransfer.effectAllowed = "move";
+    e.dataTransfer.setData("type", "item");
+    e.dataTransfer.setData("itemId", itemId);
+    e.dataTransfer.setData("sourceCategoryId", categoryId);
+    setDraggedItem({ id: itemId, categoryId });
+  }
+
+  function handleItemDragOver(e: React.DragEvent, itemId: string) {
+    e.preventDefault();
+    e.stopPropagation();
+    if (draggedItem && draggedItem.id !== itemId) {
+      setDragOverItem(itemId);
+    }
+  }
+
+  function handleItemDragLeave(e: React.DragEvent) {
+    e.stopPropagation();
+    setDragOverItem(null);
+  }
+
+  async function handleItemDrop(
+    e: React.DragEvent,
+    targetItemId: string,
+    targetCategoryId: string
+  ) {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragOverItem(null);
+
+    if (!draggedItem || draggedItem.id === targetItemId) {
+      setDraggedItem(null);
+      return;
+    }
+
+    const sourceCategory = categories.find((c) => c.id === draggedItem.categoryId);
+    const targetCategory = categories.find((c) => c.id === targetCategoryId);
+
+    if (!sourceCategory || !targetCategory) {
+      setDraggedItem(null);
+      return;
+    }
+
+    // Create new categories array
+    const newCategories = categories.map((cat) => ({ ...cat, items: [...cat.items] }));
+    const sourceCatIndex = newCategories.findIndex((c) => c.id === draggedItem.categoryId);
+    const targetCatIndex = newCategories.findIndex((c) => c.id === targetCategoryId);
+
+    // Find and remove item from source
+    const itemIndex = newCategories[sourceCatIndex].items.findIndex(
+      (item) => item.id === draggedItem.id
+    );
+    const [movedItem] = newCategories[sourceCatIndex].items.splice(itemIndex, 1);
+
+    // Find target position and insert
+    const targetItemIndex = newCategories[targetCatIndex].items.findIndex(
+      (item) => item.id === targetItemId
+    );
+    newCategories[targetCatIndex].items.splice(targetItemIndex, 0, movedItem);
+
+    setCategories(newCategories);
+
+    // Update server
+    try {
+      await fetch("/api/restaurant/items", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          itemIds: newCategories[targetCatIndex].items.map((item) => item.id),
+          categoryId: targetCategoryId,
+        }),
+      });
+    } catch (error) {
+      console.error("Error reordering items:", error);
+      fetchCategories();
+    }
+
+    setDraggedItem(null);
+  }
+
+  function handleItemDragEnd() {
+    setDraggedItem(null);
+    setDragOverItem(null);
+  }
+
+  // === MODAL HANDLERS ===
+
   function openCategoryModal(category?: Category) {
     if (category) {
       setEditingCategory(category);
@@ -171,14 +372,18 @@ export default function MenuPage() {
       setItemDescription(item.description || "");
       setItemPrice((item.priceInCents / 100).toFixed(2));
       setItemCategoryId(categoryId);
+      setItemImageUrl(item.imageUrl);
       setItemTagIds(item.tags?.map((t) => t.id) || []);
+      setItemAllergens(item.allergens || []);
     } else {
       setEditingItem(null);
       setItemName("");
       setItemDescription("");
       setItemPrice("");
       setItemCategoryId(categoryId);
+      setItemImageUrl(null);
       setItemTagIds([]);
+      setItemAllergens([]);
     }
     setNewTagName("");
     setShowItemModal(true);
@@ -223,6 +428,28 @@ export default function MenuPage() {
     }
   }
 
+  async function handleUploadImage(file: File) {
+    setUploadingImage(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+
+      const res = await fetch("/api/upload", {
+        method: "POST",
+        body: formData,
+      });
+
+      const data = await res.json();
+      if (data.url) {
+        setItemImageUrl(data.url);
+      }
+    } catch (error) {
+      console.error("Upload error:", error);
+    } finally {
+      setUploadingImage(false);
+    }
+  }
+
   async function handleSaveItem(e: React.FormEvent) {
     e.preventDefault();
     setSaving(true);
@@ -241,7 +468,9 @@ export default function MenuPage() {
           description: itemDescription || null,
           priceInCents: Math.round(parseFloat(itemPrice) * 100),
           categoryId: itemCategoryId,
+          imageUrl: itemImageUrl,
           tagIds: itemTagIds,
+          allergens: itemAllergens,
         }),
       });
 
@@ -270,7 +499,6 @@ export default function MenuPage() {
         setItemTagIds((prev) => [...prev, data.tag.id]);
         setNewTagName("");
       } else if (response.status === 409 && data.tag) {
-        // Tag already exists, just add it
         setItemTagIds((prev) => [...prev, data.tag.id]);
         setNewTagName("");
       }
@@ -282,6 +510,14 @@ export default function MenuPage() {
   function toggleTag(tagId: string) {
     setItemTagIds((prev) =>
       prev.includes(tagId) ? prev.filter((id) => id !== tagId) : [...prev, tagId]
+    );
+  }
+
+  function toggleAllergen(allergenId: string) {
+    setItemAllergens((prev) =>
+      prev.includes(allergenId)
+        ? prev.filter((id) => id !== allergenId)
+        : [...prev, allergenId]
     );
   }
 
@@ -430,15 +666,30 @@ export default function MenuPage() {
           {categories.map((category) => (
             <div
               key={category.id}
-              className="bg-white rounded-xl border overflow-hidden"
+              className={`bg-white rounded-xl border overflow-hidden transition-all ${
+                dragOverCategory === category.id
+                  ? "border-violet-500 ring-2 ring-violet-200"
+                  : ""
+              } ${draggedCategory === category.id ? "opacity-50" : ""}`}
+              draggable
+              onDragStart={(e) => handleCategoryDragStart(e, category.id)}
+              onDragOver={(e) => handleCategoryDragOver(e, category.id)}
+              onDragLeave={handleCategoryDragLeave}
+              onDrop={(e) => handleCategoryDrop(e, category.id)}
+              onDragEnd={handleCategoryDragEnd}
             >
               {/* Category header */}
               <div
-                className="p-4 flex items-center justify-between cursor-pointer hover:bg-gray-50"
+                className="p-4 flex items-center justify-between cursor-pointer hover:bg-gray-50 select-none"
                 onClick={() => toggleCategory(category.id)}
               >
                 <div className="flex items-center gap-3">
-                  <GripVertical className="w-5 h-5 text-gray-400" />
+                  <div
+                    className="cursor-grab active:cursor-grabbing p-1 -m-1 hover:bg-gray-100 rounded"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <GripVertical className="w-5 h-5 text-gray-400" />
+                  </div>
                   <div>
                     <h3 className="font-semibold">{category.name}</h3>
                     <p className="text-sm text-gray-500">
@@ -494,17 +745,68 @@ export default function MenuPage() {
                     category.items.map((item) => (
                       <div
                         key={item.id}
-                        className={`p-4 flex items-center justify-between ${!item.isAvailable ? "bg-gray-50" : ""}`}
+                        draggable
+                        onDragStart={(e) =>
+                          handleItemDragStart(e, item.id, category.id)
+                        }
+                        onDragOver={(e) => handleItemDragOver(e, item.id)}
+                        onDragLeave={handleItemDragLeave}
+                        onDrop={(e) => handleItemDrop(e, item.id, category.id)}
+                        onDragEnd={handleItemDragEnd}
+                        className={`p-4 flex items-center justify-between transition-all ${
+                          !item.isAvailable ? "bg-gray-50" : ""
+                        } ${
+                          dragOverItem === item.id
+                            ? "border-t-2 border-violet-500"
+                            : ""
+                        } ${
+                          draggedItem?.id === item.id ? "opacity-50" : ""
+                        }`}
                       >
                         <div className="flex items-center gap-3">
-                          <GripVertical className="w-4 h-4 text-gray-300" />
-                          <div>
-                            <div className="flex items-center gap-2">
+                          <div
+                            className="cursor-grab active:cursor-grabbing p-1 -m-1 hover:bg-gray-100 rounded"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <GripVertical className="w-4 h-4 text-gray-300" />
+                          </div>
+                          {item.imageUrl && (
+                            <div className="w-12 h-12 rounded-lg overflow-hidden bg-gray-100 flex-shrink-0">
+                              <Image
+                                src={item.imageUrl}
+                                alt={item.name}
+                                width={48}
+                                height={48}
+                                className="w-full h-full object-cover"
+                              />
+                            </div>
+                          )}
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-2 flex-wrap">
                               <p
                                 className={`font-medium ${!item.isAvailable ? "text-gray-400" : ""}`}
                               >
                                 {item.name}
                               </p>
+                              {/* Diets & Allergens icons */}
+                              {item.allergens && item.allergens.length > 0 && (
+                                <div className="flex gap-0.5">
+                                  {item.allergens.slice(0, 5).map((id) => {
+                                    const diet = DIETS.find(d => d.id === id);
+                                    const allergen = ALLERGENS.find(a => a.id === id);
+                                    const icon = diet?.icon || allergen?.icon;
+                                    return icon ? (
+                                      <span key={id} className="text-sm" title={diet?.label || allergen?.label}>
+                                        {icon}
+                                      </span>
+                                    ) : null;
+                                  })}
+                                  {item.allergens.length > 5 && (
+                                    <span className="text-xs text-gray-400">+{item.allergens.length - 5}</span>
+                                  )}
+                                </div>
+                              )}
+                              {/* Tags */}
                               {item.tags && item.tags.length > 0 && (
                                 <div className="flex gap-1">
                                   {item.tags.map((tag) => (
@@ -608,7 +910,7 @@ export default function MenuPage() {
                     type="text"
                     value={categoryName}
                     onChange={(e) => setCategoryName(e.target.value)}
-                    className="w-full px-4 py-2 border rounded-lg"
+                    className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-violet-500 focus:border-transparent"
                     placeholder="ou saisissez un nom personnalisé"
                     required
                   />
@@ -620,7 +922,7 @@ export default function MenuPage() {
                   <textarea
                     value={categoryDescription}
                     onChange={(e) => setCategoryDescription(e.target.value)}
-                    className="w-full px-4 py-2 border rounded-lg"
+                    className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-violet-500 focus:border-transparent"
                     rows={2}
                   />
                 </div>
@@ -646,78 +948,230 @@ export default function MenuPage() {
         </div>
       )}
 
-      {/* Item Modal */}
+      {/* Item Modal - Improved */}
       {showItemModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-xl p-6 w-full max-w-md">
-            <h2 className="text-xl font-bold mb-4">
-              {editingItem ? "Modifier le plat" : "Nouveau plat"}
-            </h2>
-            <form onSubmit={handleSaveItem}>
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium mb-1">Nom</label>
-                  <input
-                    type="text"
-                    value={itemName}
-                    onChange={(e) => setItemName(e.target.value)}
-                    className="w-full px-4 py-2 border rounded-lg"
-                    required
-                  />
+          <div className="bg-white rounded-xl w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col">
+            {/* Header */}
+            <div className="px-6 py-4 border-b flex items-center justify-between">
+              <h2 className="text-xl font-bold">
+                {editingItem ? "Modifier le plat" : "Nouveau plat"}
+              </h2>
+              <button
+                type="button"
+                onClick={() => setShowItemModal(false)}
+                className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Form */}
+            <form onSubmit={handleSaveItem} className="flex-1 overflow-y-auto">
+              <div className="p-6 space-y-6">
+                {/* Row 1: Photo + Basic info */}
+                <div className="grid md:grid-cols-[200px,1fr] gap-6">
+                  {/* Photo */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Photo
+                    </label>
+                    {itemImageUrl ? (
+                      <div className="space-y-2">
+                        <div className="relative aspect-square rounded-xl overflow-hidden bg-gray-100">
+                          <Image
+                            src={itemImageUrl}
+                            alt="Preview"
+                            fill
+                            className="object-cover"
+                          />
+                        </div>
+                        <div className="flex gap-2">
+                          <label className="flex-1 cursor-pointer px-3 py-2 text-sm border rounded-lg hover:bg-gray-50 flex items-center justify-center gap-2">
+                            <Upload className="w-4 h-4" />
+                            Changer
+                            <input
+                              type="file"
+                              accept="image/png,image/jpeg,image/webp"
+                              className="hidden"
+                              onChange={(e) => {
+                                const file = e.target.files?.[0];
+                                if (file) handleUploadImage(file);
+                              }}
+                            />
+                          </label>
+                          <button
+                            type="button"
+                            onClick={() => setItemImageUrl(null)}
+                            className="px-3 py-2 text-sm text-red-600 border border-red-200 rounded-lg hover:bg-red-50"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <label className="cursor-pointer flex flex-col items-center justify-center aspect-square border-2 border-dashed border-gray-300 rounded-xl hover:border-violet-400 hover:bg-violet-50/50 transition-colors">
+                        {uploadingImage ? (
+                          <Loader2 className="w-8 h-8 text-violet-500 animate-spin" />
+                        ) : (
+                          <>
+                            <ImageIcon className="w-10 h-10 text-gray-300 mb-2" />
+                            <span className="text-sm text-gray-500">Ajouter une photo</span>
+                            <span className="text-xs text-gray-400 mt-1">PNG, JPG, WebP</span>
+                          </>
+                        )}
+                        <input
+                          type="file"
+                          accept="image/png,image/jpeg,image/webp"
+                          className="hidden"
+                          disabled={uploadingImage}
+                          onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            if (file) handleUploadImage(file);
+                          }}
+                        />
+                      </label>
+                    )}
+                  </div>
+
+                  {/* Basic info */}
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Nom du plat *
+                      </label>
+                      <input
+                        type="text"
+                        value={itemName}
+                        onChange={(e) => setItemName(e.target.value)}
+                        className="w-full px-4 py-2.5 border rounded-lg focus:ring-2 focus:ring-violet-500 focus:border-transparent"
+                        placeholder="Ex: Salade César, Burger Classique..."
+                        required
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Description
+                      </label>
+                      <textarea
+                        value={itemDescription}
+                        onChange={(e) => setItemDescription(e.target.value)}
+                        className="w-full px-4 py-2.5 border rounded-lg focus:ring-2 focus:ring-violet-500 focus:border-transparent resize-none"
+                        rows={3}
+                        placeholder="Décrivez les ingrédients et la préparation..."
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Prix *
+                        </label>
+                        <div className="relative">
+                          <input
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            value={itemPrice}
+                            onChange={(e) => setItemPrice(e.target.value)}
+                            className="w-full px-4 py-2.5 pr-10 border rounded-lg focus:ring-2 focus:ring-violet-500 focus:border-transparent"
+                            placeholder="0.00"
+                            required
+                          />
+                          <span className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 text-sm">
+                            EUR
+                          </span>
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Catégorie *
+                        </label>
+                        <select
+                          value={itemCategoryId}
+                          onChange={(e) => setItemCategoryId(e.target.value)}
+                          className="w-full px-4 py-2.5 border rounded-lg focus:ring-2 focus:ring-violet-500 focus:border-transparent bg-white"
+                          required
+                        >
+                          {categories.map((cat) => (
+                            <option key={cat.id} value={cat.id}>
+                              {cat.name}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+                  </div>
                 </div>
+
+                {/* Divider */}
+                <hr className="border-gray-200" />
+
+                {/* Régimes & Labels */}
                 <div>
-                  <label className="block text-sm font-medium mb-1">
-                    Description (optionnel)
+                  <label className="block text-sm font-medium text-gray-700 mb-3">
+                    Régimes & Labels
                   </label>
-                  <textarea
-                    value={itemDescription}
-                    onChange={(e) => setItemDescription(e.target.value)}
-                    className="w-full px-4 py-2 border rounded-lg"
-                    rows={2}
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium mb-1">
-                    Prix (EUR)
-                  </label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    value={itemPrice}
-                    onChange={(e) => setItemPrice(e.target.value)}
-                    className="w-full px-4 py-2 border rounded-lg"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium mb-1">
-                    Categorie
-                  </label>
-                  <select
-                    value={itemCategoryId}
-                    onChange={(e) => setItemCategoryId(e.target.value)}
-                    className="w-full px-4 py-2 border rounded-lg"
-                    required
-                  >
-                    {categories.map((cat) => (
-                      <option key={cat.id} value={cat.id}>
-                        {cat.name}
-                      </option>
+                  <div className="flex flex-wrap gap-2">
+                    {DIETS.map((diet) => (
+                      <button
+                        key={diet.id}
+                        type="button"
+                        onClick={() => toggleAllergen(diet.id)}
+                        className={`px-3 py-1.5 text-sm rounded-full transition-all flex items-center gap-1.5 ${
+                          itemAllergens.includes(diet.id)
+                            ? `${diet.color} ring-2 ring-offset-1 ring-current`
+                            : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                        }`}
+                      >
+                        <span>{diet.icon}</span>
+                        <span>{diet.label}</span>
+                      </button>
                     ))}
-                  </select>
+                  </div>
                 </div>
+
+                {/* Allergènes */}
                 <div>
-                  <label className="block text-sm font-medium mb-1">
-                    Tags
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Allergènes présents
                   </label>
-                  <div className="flex flex-wrap gap-2 mb-2">
+                  <p className="text-xs text-gray-500 mb-3">
+                    Sélectionnez les allergènes contenus dans ce plat (obligatoire selon la réglementation)
+                  </p>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                    {ALLERGENS.map((allergen) => (
+                      <button
+                        key={allergen.id}
+                        type="button"
+                        onClick={() => toggleAllergen(allergen.id)}
+                        className={`px-3 py-2 text-sm rounded-lg border transition-all flex items-center gap-2 ${
+                          itemAllergens.includes(allergen.id)
+                            ? "bg-red-50 border-red-300 text-red-700"
+                            : "bg-white border-gray-200 text-gray-600 hover:border-gray-300 hover:bg-gray-50"
+                        }`}
+                      >
+                        <span className="text-base">{allergen.icon}</span>
+                        <span className="truncate">{allergen.label}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Tags personnalisés */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-3">
+                    Tags personnalisés
+                  </label>
+                  <div className="flex flex-wrap gap-2 mb-3">
                     {tags.map((tag) => (
                       <button
                         key={tag.id}
                         type="button"
                         onClick={() => toggleTag(tag.id)}
-                        className={`px-2 py-1 text-xs rounded-full transition-all ${
+                        className={`px-3 py-1.5 text-sm rounded-full transition-all ${
                           itemTagIds.includes(tag.id)
                             ? "text-white ring-2 ring-offset-1"
                             : "bg-gray-100 text-gray-700 hover:bg-gray-200"
@@ -731,14 +1185,17 @@ export default function MenuPage() {
                         {tag.name}
                       </button>
                     ))}
+                    {tags.length === 0 && (
+                      <span className="text-sm text-gray-400">Aucun tag créé</span>
+                    )}
                   </div>
                   <div className="flex gap-2">
                     <input
                       type="text"
                       value={newTagName}
                       onChange={(e) => setNewTagName(e.target.value)}
-                      placeholder="Nouveau tag..."
-                      className="flex-1 px-3 py-1.5 text-sm border rounded-lg"
+                      placeholder="Créer un nouveau tag..."
+                      className="flex-1 px-3 py-2 text-sm border rounded-lg focus:ring-2 focus:ring-violet-500 focus:border-transparent"
                       onKeyDown={(e) => {
                         if (e.key === "Enter") {
                           e.preventDefault();
@@ -750,27 +1207,37 @@ export default function MenuPage() {
                       type="button"
                       onClick={handleCreateTag}
                       disabled={!newTagName.trim()}
-                      className="px-3 py-1.5 text-sm bg-gray-100 rounded-lg hover:bg-gray-200 disabled:opacity-50"
+                      className="px-4 py-2 text-sm bg-gray-100 rounded-lg hover:bg-gray-200 disabled:opacity-50 flex items-center gap-2"
                     >
                       <Tag className="w-4 h-4" />
+                      Ajouter
                     </button>
                   </div>
                 </div>
               </div>
-              <div className="flex gap-3 mt-6">
+
+              {/* Footer */}
+              <div className="px-6 py-4 border-t bg-gray-50 flex gap-3">
                 <button
                   type="button"
                   onClick={() => setShowItemModal(false)}
-                  className="flex-1 px-4 py-2 border rounded-lg hover:bg-gray-50"
+                  className="flex-1 px-4 py-2.5 border rounded-lg hover:bg-white transition-colors font-medium"
                 >
                   Annuler
                 </button>
                 <button
                   type="submit"
                   disabled={saving}
-                  className="flex-1 px-4 py-2 bg-violet-600 text-white rounded-lg hover:bg-violet-700 disabled:opacity-50"
+                  className="flex-1 px-4 py-2.5 bg-violet-600 text-white rounded-lg hover:bg-violet-700 disabled:opacity-50 transition-colors font-medium flex items-center justify-center gap-2"
                 >
-                  {saving ? "Enregistrement..." : "Enregistrer"}
+                  {saving ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Enregistrement...
+                    </>
+                  ) : (
+                    "Enregistrer"
+                  )}
                 </button>
               </div>
             </form>

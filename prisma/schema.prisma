@@ -346,6 +346,7 @@ model MenuItem {
   imageUrl     String?
   isAvailable  Boolean      @default(true)
   sortOrder    Int          @default(0)
+  allergens    String[]     @default([])
   categoryId   String
   category     MenuCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
   orderItems   OrderItem[]

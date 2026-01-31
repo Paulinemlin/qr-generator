@@ -11,6 +11,9 @@ import {
   ExternalLink,
   Save,
   Palette,
+  Upload,
+  X,
+  ImageIcon,
 } from "lucide-react";
 
 interface Restaurant {
@@ -18,6 +21,7 @@ interface Restaurant {
   name: string;
   slug: string;
   description: string | null;
+  logoUrl: string | null;
   currency: string;
   stripeAccountId: string | null;
   stripeOnboarded: boolean;
@@ -45,6 +49,8 @@ export default function SettingsPage() {
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [currency, setCurrency] = useState("EUR");
+  const [logoUrl, setLogoUrl] = useState<string | null>(null);
+  const [uploading, setUploading] = useState(false);
 
   useEffect(() => {
     fetchData();
@@ -66,6 +72,7 @@ export default function SettingsPage() {
         setName(r.name);
         setDescription(r.description || "");
         setCurrency(r.currency);
+        setLogoUrl(r.logoUrl);
       }
 
       setStripeStatus(stripeData);
@@ -88,6 +95,7 @@ export default function SettingsPage() {
           name,
           description,
           currency,
+          logoUrl,
         }),
       });
 
@@ -187,6 +195,114 @@ export default function SettingsPage() {
                 className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-violet-500 focus:border-transparent"
                 rows={3}
               />
+            </div>
+
+            {/* Logo upload */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Logo du restaurant
+              </label>
+
+              {logoUrl ? (
+                <div className="flex items-center gap-4">
+                  <div className="relative w-20 h-20 rounded-lg overflow-hidden border bg-gray-50">
+                    <img
+                      src={logoUrl}
+                      alt="Logo"
+                      className="w-full h-full object-contain"
+                    />
+                  </div>
+                  <div className="flex flex-col gap-2">
+                    <label className="cursor-pointer px-3 py-1.5 text-sm border rounded-lg hover:bg-gray-50 inline-flex items-center gap-2">
+                      <Upload className="w-4 h-4" />
+                      Changer
+                      <input
+                        type="file"
+                        accept="image/png,image/jpeg,image/webp"
+                        className="hidden"
+                        onChange={async (e) => {
+                          const file = e.target.files?.[0];
+                          if (!file) return;
+
+                          setUploading(true);
+                          try {
+                            const formData = new FormData();
+                            formData.append("file", file);
+
+                            const res = await fetch("/api/upload", {
+                              method: "POST",
+                              body: formData,
+                            });
+
+                            const data = await res.json();
+                            if (data.url) {
+                              setLogoUrl(data.url);
+                            }
+                          } catch (error) {
+                            console.error("Upload error:", error);
+                          } finally {
+                            setUploading(false);
+                          }
+                        }}
+                      />
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => setLogoUrl(null)}
+                      className="px-3 py-1.5 text-sm text-red-600 border border-red-200 rounded-lg hover:bg-red-50 inline-flex items-center gap-2"
+                    >
+                      <X className="w-4 h-4" />
+                      Supprimer
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <label className="cursor-pointer flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-gray-300 rounded-lg hover:border-violet-400 hover:bg-violet-50/50 transition-colors">
+                  {uploading ? (
+                    <Loader2 className="w-8 h-8 text-violet-500 animate-spin" />
+                  ) : (
+                    <>
+                      <ImageIcon className="w-8 h-8 text-gray-400 mb-2" />
+                      <span className="text-sm text-gray-500">
+                        Cliquez pour ajouter un logo
+                      </span>
+                      <span className="text-xs text-gray-400 mt-1">
+                        PNG, JPG ou WebP (max 5MB)
+                      </span>
+                    </>
+                  )}
+                  <input
+                    type="file"
+                    accept="image/png,image/jpeg,image/webp"
+                    className="hidden"
+                    disabled={uploading}
+                    onChange={async (e) => {
+                      const file = e.target.files?.[0];
+                      if (!file) return;
+
+                      setUploading(true);
+                      try {
+                        const formData = new FormData();
+                        formData.append("file", file);
+
+                        const res = await fetch("/api/upload", {
+                          method: "POST",
+                          body: formData,
+                        });
+
+                        const data = await res.json();
+                        if (data.url) {
+                          setLogoUrl(data.url);
+                        }
+                      } catch (error) {
+                        console.error("Upload error:", error);
+                      } finally {
+                        setUploading(false);
+                      }
+                    }}
+                  />
+                </label>
+              )}
             </div>
 
             <div>

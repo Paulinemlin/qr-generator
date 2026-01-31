@@ -70,7 +70,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { name, description, priceInCents, categoryId, imageUrl, tagIds } = body;
+    const { name, description, priceInCents, categoryId, imageUrl, tagIds, allergens } = body;
 
     if (!name || name.trim().length < 1) {
       return NextResponse.json(
@@ -120,6 +120,7 @@ export async function POST(request: NextRequest) {
         description: description?.trim() || null,
         priceInCents: Math.round(priceInCents),
         imageUrl: imageUrl || null,
+        allergens: Array.isArray(allergens) ? allergens : [],
         sortOrder: (lastItem?.sortOrder ?? -1) + 1,
         categoryId,
         ...(tagIds && Array.isArray(tagIds) && tagIds.length > 0
@@ -139,6 +140,74 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ item }, { status: 201 });
   } catch (error) {
     console.error("Error creating item:", error);
+    return NextResponse.json({ error: "Erreur serveur" }, { status: 500 });
+  }
+}
+
+// PATCH /api/restaurant/items - Reorder items within a category
+export async function PATCH(request: NextRequest) {
+  try {
+    const session = await getServerSession();
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: "Non autorise" }, { status: 401 });
+    }
+
+    const restaurant = await getRestaurant(session.user.id);
+    if (!restaurant) {
+      return NextResponse.json(
+        { error: "Restaurant non trouve" },
+        { status: 404 }
+      );
+    }
+
+    const body = await request.json();
+    const { itemIds, categoryId } = body;
+
+    if (!Array.isArray(itemIds)) {
+      return NextResponse.json(
+        { error: "itemIds doit etre un tableau" },
+        { status: 400 }
+      );
+    }
+
+    // Verify category belongs to restaurant
+    if (categoryId) {
+      const category = await prisma.menuCategory.findFirst({
+        where: {
+          id: categoryId,
+          restaurantId: restaurant.id,
+        },
+      });
+
+      if (!category) {
+        return NextResponse.json(
+          { error: "Categorie non trouvee" },
+          { status: 404 }
+        );
+      }
+    }
+
+    // Update sortOrder for each item
+    await prisma.$transaction(
+      itemIds.map((id: string, index: number) =>
+        prisma.menuItem.updateMany({
+          where: {
+            id,
+            category: {
+              restaurantId: restaurant.id,
+            },
+          },
+          data: {
+            sortOrder: index,
+            ...(categoryId ? { categoryId } : {}),
+          },
+        })
+      )
+    );
+
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    console.error("Error reordering items:", error);
     return NextResponse.json({ error: "Erreur serveur" }, { status: 500 });
   }
 }
