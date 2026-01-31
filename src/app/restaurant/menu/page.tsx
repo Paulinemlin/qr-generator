@@ -363,6 +363,13 @@ export default function MenuPage() {
           <p className="text-gray-500">Gerez vos categories et plats</p>
         </div>
         <div className="flex items-center gap-2">
+          <a
+            href="/api/restaurant/menu/template?format=xlsx"
+            className="flex items-center gap-2 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50"
+          >
+            <Download className="w-4 h-4" />
+            Template
+          </a>
           <button
             onClick={() => setShowImportModal(true)}
             className="flex items-center gap-2 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50"
@@ -383,14 +390,31 @@ export default function MenuPage() {
       {categories.length === 0 ? (
         <div className="bg-white rounded-xl border p-8 text-center">
           <p className="text-gray-500 mb-4">
-            Aucune categorie. Commencez par creer une categorie.
+            Aucune categorie. Commencez par creer une categorie ou importez votre menu.
           </p>
-          <button
-            onClick={() => openCategoryModal()}
-            className="px-4 py-2 bg-violet-600 text-white rounded-lg hover:bg-violet-700"
-          >
-            Creer une categorie
-          </button>
+          <div className="flex items-center justify-center gap-3">
+            <a
+              href="/api/restaurant/menu/template?format=xlsx"
+              className="flex items-center gap-2 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50"
+            >
+              <Download className="w-4 h-4" />
+              Template Excel
+            </a>
+            <button
+              onClick={() => setShowImportModal(true)}
+              className="flex items-center gap-2 px-4 py-2 border border-violet-300 text-violet-700 rounded-lg hover:bg-violet-50"
+            >
+              <Upload className="w-4 h-4" />
+              Importer
+            </button>
+            <button
+              onClick={() => openCategoryModal()}
+              className="flex items-center gap-2 px-4 py-2 bg-violet-600 text-white rounded-lg hover:bg-violet-700"
+            >
+              <Plus className="w-4 h-4" />
+              Nouvelle categorie
+            </button>
+          </div>
         </div>
       ) : (
         <div className="space-y-4">
