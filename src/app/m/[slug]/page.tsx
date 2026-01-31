@@ -29,6 +29,9 @@ interface Category {
   items: MenuItem[];
 }
 
+type MenuTheme = "DEFAULT" | "DARK" | "ELEGANT" | "VIBRANT" | "MINIMAL" | "CUSTOM";
+type OrderingMode = "PAYMENT_REQUIRED" | "CALL_WAITER" | "PAY_LATER";
+
 interface Restaurant {
   id: string;
   name: string;
@@ -37,11 +40,40 @@ interface Restaurant {
   logoUrl: string | null;
   currency: string;
   canAcceptPayments: boolean;
+  menuTheme: MenuTheme;
+  primaryColor: string;
+  accentColor: string;
+  backgroundColor: string;
+  textColor: string;
+  showItemImages: boolean;
+  orderingMode: OrderingMode;
 }
 
 interface Table {
   id: string;
   tableNumber: string;
+}
+
+// Theme presets matching the settings page
+const themePresets: Record<MenuTheme, { primary: string; accent: string; bg: string; text: string }> = {
+  DEFAULT: { primary: "#7c3aed", accent: "#8b5cf6", bg: "#f9fafb", text: "#111827" },
+  DARK: { primary: "#8b5cf6", accent: "#a78bfa", bg: "#1f2937", text: "#f9fafb" },
+  ELEGANT: { primary: "#b45309", accent: "#d97706", bg: "#fffbeb", text: "#78350f" },
+  VIBRANT: { primary: "#db2777", accent: "#ec4899", bg: "#fdf2f8", text: "#831843" },
+  MINIMAL: { primary: "#374151", accent: "#6b7280", bg: "#ffffff", text: "#111827" },
+  CUSTOM: { primary: "#7c3aed", accent: "#8b5cf6", bg: "#f9fafb", text: "#111827" },
+};
+
+function getThemeColors(restaurant: Restaurant) {
+  if (restaurant.menuTheme === "CUSTOM") {
+    return {
+      primary: restaurant.primaryColor,
+      accent: restaurant.accentColor,
+      bg: restaurant.backgroundColor,
+      text: restaurant.textColor,
+    };
+  }
+  return themePresets[restaurant.menuTheme] || themePresets.DEFAULT;
 }
 
 function MenuContent({ slug }: { slug: string }) {
@@ -105,6 +137,15 @@ function MenuContent({ slug }: { slug: string }) {
     return item?.quantity || 0;
   };
 
+  // Check if ordering is enabled (either with payment or without)
+  const canOrder = (r: Restaurant): boolean => {
+    if (r.orderingMode === "PAYMENT_REQUIRED") {
+      return r.canAcceptPayments;
+    }
+    // CALL_WAITER and PAY_LATER modes don't require Stripe
+    return true;
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -129,10 +170,23 @@ function MenuContent({ slug }: { slug: string }) {
     );
   }
 
+  const theme = getThemeColors(restaurant);
+  const orderingEnabled = canOrder(restaurant);
+  const isDarkTheme = restaurant.menuTheme === "DARK";
+
   return (
-    <div className="min-h-screen bg-gray-50 pb-24">
+    <div
+      className="min-h-screen pb-24"
+      style={{ backgroundColor: theme.bg, color: theme.text }}
+    >
       {/* Header */}
-      <header className="bg-white border-b sticky top-0 z-40">
+      <header
+        className="border-b sticky top-0 z-40"
+        style={{
+          backgroundColor: isDarkTheme ? "#111827" : "#ffffff",
+          borderColor: isDarkTheme ? "#374151" : "#e5e7eb"
+        }}
+      >
         <div className="max-w-lg mx-auto px-4 py-4">
           <div className="flex items-center gap-3">
             {restaurant.logoUrl ? (
@@ -144,16 +198,25 @@ function MenuContent({ slug }: { slug: string }) {
                 className="w-12 h-12 rounded-full object-cover"
               />
             ) : (
-              <div className="w-12 h-12 rounded-full bg-violet-100 flex items-center justify-center">
-                <ChefHat className="w-6 h-6 text-violet-600" />
+              <div
+                className="w-12 h-12 rounded-full flex items-center justify-center"
+                style={{ backgroundColor: `${theme.primary}20` }}
+              >
+                <ChefHat className="w-6 h-6" style={{ color: theme.primary }} />
               </div>
             )}
             <div>
-              <h1 className="font-bold text-lg text-gray-900">
+              <h1
+                className="font-bold text-lg"
+                style={{ color: isDarkTheme ? "#f9fafb" : theme.text }}
+              >
                 {restaurant.name}
               </h1>
               {table && (
-                <p className="text-sm text-gray-500">
+                <p
+                  className="text-sm"
+                  style={{ color: isDarkTheme ? "#9ca3af" : "#6b7280" }}
+                >
                   Table {table.tableNumber}
                 </p>
               )}
@@ -163,17 +226,20 @@ function MenuContent({ slug }: { slug: string }) {
 
         {/* Category tabs */}
         {categories.length > 1 && (
-          <div className="overflow-x-auto scrollbar-hide border-t">
+          <div
+            className="overflow-x-auto scrollbar-hide border-t"
+            style={{ borderColor: isDarkTheme ? "#374151" : "#e5e7eb" }}
+          >
             <div className="flex px-4 py-2 gap-2 min-w-max">
               {categories.map((category) => (
                 <button
                   key={category.id}
                   onClick={() => setActiveCategory(category.id)}
-                  className={`px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-colors ${
-                    activeCategory === category.id
-                      ? "bg-violet-600 text-white"
-                      : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-                  }`}
+                  className="px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-colors"
+                  style={{
+                    backgroundColor: activeCategory === category.id ? theme.primary : (isDarkTheme ? "#374151" : "#f3f4f6"),
+                    color: activeCategory === category.id ? "#ffffff" : (isDarkTheme ? "#d1d5db" : "#374151"),
+                  }}
                 >
                   {category.name}
                 </button>
@@ -185,7 +251,34 @@ function MenuContent({ slug }: { slug: string }) {
 
       {/* Menu items */}
       <main className="max-w-lg mx-auto px-4 py-4">
-        {!restaurant.canAcceptPayments && (
+        {/* Show ordering mode info */}
+        {restaurant.orderingMode === "CALL_WAITER" && (
+          <div
+            className="mb-4 p-4 rounded-lg border"
+            style={{
+              backgroundColor: `${theme.primary}10`,
+              borderColor: `${theme.primary}30`
+            }}
+          >
+            <p className="text-sm" style={{ color: theme.text }}>
+              📞 Passez commande et appelez un serveur pour payer
+            </p>
+          </div>
+        )}
+        {restaurant.orderingMode === "PAY_LATER" && (
+          <div
+            className="mb-4 p-4 rounded-lg border"
+            style={{
+              backgroundColor: `${theme.primary}10`,
+              borderColor: `${theme.primary}30`
+            }}
+          >
+            <p className="text-sm" style={{ color: theme.text }}>
+              💳 Commandez maintenant, payez a la fin du repas
+            </p>
+          </div>
+        )}
+        {restaurant.orderingMode === "PAYMENT_REQUIRED" && !restaurant.canAcceptPayments && (
           <div className="mb-4 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
             <p className="text-sm text-yellow-800">
               Ce restaurant ne peut pas encore accepter les paiements en ligne.
@@ -199,7 +292,10 @@ function MenuContent({ slug }: { slug: string }) {
             className={activeCategory === category.id ? "block" : "hidden"}
           >
             {category.description && (
-              <p className="text-gray-600 text-sm mb-4">
+              <p
+                className="text-sm mb-4"
+                style={{ color: isDarkTheme ? "#9ca3af" : "#6b7280" }}
+              >
                 {category.description}
               </p>
             )}
@@ -208,16 +304,21 @@ function MenuContent({ slug }: { slug: string }) {
               {category.items.map((item) => {
                 const quantity = getItemQuantity(item.id);
                 const isAdding = addingItem === item.id;
+                const showImage = restaurant.showItemImages && item.imageUrl;
 
                 return (
                   <div
                     key={item.id}
-                    className="bg-white rounded-xl p-4 shadow-sm border"
+                    className="rounded-xl p-4 shadow-sm border"
+                    style={{
+                      backgroundColor: isDarkTheme ? "#1f2937" : "#ffffff",
+                      borderColor: isDarkTheme ? "#374151" : "#e5e7eb"
+                    }}
                   >
                     <div className="flex gap-4">
-                      {item.imageUrl && (
+                      {showImage && (
                         <Image
-                          src={item.imageUrl}
+                          src={item.imageUrl!}
                           alt={item.name}
                           width={80}
                           height={80}
@@ -225,15 +326,24 @@ function MenuContent({ slug }: { slug: string }) {
                         />
                       )}
                       <div className="flex-1 min-w-0">
-                        <h3 className="font-semibold text-gray-900">
+                        <h3
+                          className="font-semibold"
+                          style={{ color: isDarkTheme ? "#f9fafb" : theme.text }}
+                        >
                           {item.name}
                         </h3>
                         {item.description && (
-                          <p className="text-sm text-gray-500 mt-1 line-clamp-2">
+                          <p
+                            className="text-sm mt-1 line-clamp-2"
+                            style={{ color: isDarkTheme ? "#9ca3af" : "#6b7280" }}
+                          >
                             {item.description}
                           </p>
                         )}
-                        <p className="font-bold text-violet-600 mt-2">
+                        <p
+                          className="font-bold mt-2"
+                          style={{ color: theme.primary }}
+                        >
                           {formatPrice(item.priceInCents, restaurant.currency)}
                         </p>
                       </div>
@@ -244,36 +354,51 @@ function MenuContent({ slug }: { slug: string }) {
                       {quantity === 0 ? (
                         <button
                           onClick={() => handleAddItem(item)}
-                          disabled={!restaurant.canAcceptPayments}
-                          className={`flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium transition-all ${
-                            isAdding
-                              ? "bg-violet-700 text-white scale-95"
-                              : restaurant.canAcceptPayments
-                                ? "bg-violet-600 text-white hover:bg-violet-700"
-                                : "bg-gray-200 text-gray-400 cursor-not-allowed"
-                          }`}
+                          disabled={!orderingEnabled}
+                          className="flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium transition-all"
+                          style={{
+                            backgroundColor: isAdding
+                              ? theme.accent
+                              : orderingEnabled
+                                ? theme.primary
+                                : "#e5e7eb",
+                            color: orderingEnabled ? "#ffffff" : "#9ca3af",
+                            transform: isAdding ? "scale(0.95)" : "scale(1)",
+                            cursor: orderingEnabled ? "pointer" : "not-allowed",
+                          }}
                         >
                           <Plus className="w-4 h-4" />
                           Ajouter
                         </button>
                       ) : (
-                        <div className="flex items-center gap-3 bg-gray-100 rounded-full p-1">
+                        <div
+                          className="flex items-center gap-3 rounded-full p-1"
+                          style={{ backgroundColor: isDarkTheme ? "#374151" : "#f3f4f6" }}
+                        >
                           <button
                             onClick={() =>
                               updateQuantity(item.id, quantity - 1)
                             }
-                            className="w-8 h-8 rounded-full bg-white shadow flex items-center justify-center hover:bg-gray-50"
+                            className="w-8 h-8 rounded-full shadow flex items-center justify-center"
+                            style={{
+                              backgroundColor: isDarkTheme ? "#1f2937" : "#ffffff",
+                              color: isDarkTheme ? "#d1d5db" : "#374151"
+                            }}
                           >
                             <Minus className="w-4 h-4" />
                           </button>
-                          <span className="font-semibold w-6 text-center">
+                          <span
+                            className="font-semibold w-6 text-center"
+                            style={{ color: isDarkTheme ? "#f9fafb" : theme.text }}
+                          >
                             {quantity}
                           </span>
                           <button
                             onClick={() =>
                               updateQuantity(item.id, quantity + 1)
                             }
-                            className="w-8 h-8 rounded-full bg-violet-600 text-white flex items-center justify-center hover:bg-violet-700"
+                            className="w-8 h-8 rounded-full text-white flex items-center justify-center"
+                            style={{ backgroundColor: theme.primary }}
                           >
                             <Plus className="w-4 h-4" />
                           </button>
@@ -285,7 +410,10 @@ function MenuContent({ slug }: { slug: string }) {
               })}
 
               {category.items.length === 0 && (
-                <p className="text-gray-500 text-center py-8">
+                <p
+                  className="text-center py-8"
+                  style={{ color: isDarkTheme ? "#9ca3af" : "#6b7280" }}
+                >
                   Aucun plat disponible dans cette categorie
                 </p>
               )}
@@ -295,17 +423,32 @@ function MenuContent({ slug }: { slug: string }) {
       </main>
 
       {/* Floating cart button */}
-      {isLoaded && totalItems > 0 && restaurant.canAcceptPayments && (
-        <div className="fixed bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-gray-50 via-gray-50">
+      {isLoaded && totalItems > 0 && orderingEnabled && (
+        <div
+          className="fixed bottom-0 left-0 right-0 p-4"
+          style={{
+            background: `linear-gradient(to top, ${theme.bg}, ${theme.bg}ee, transparent)`
+          }}
+        >
           <div className="max-w-lg mx-auto">
             <Link
               href={`/m/${slug}/checkout${tableId ? `?tableId=${tableId}` : ""}`}
-              className="flex items-center justify-between w-full bg-violet-600 text-white rounded-full px-6 py-4 shadow-lg hover:bg-violet-700 transition-colors"
+              className="flex items-center justify-between w-full rounded-full px-6 py-4 shadow-lg transition-colors"
+              style={{
+                backgroundColor: theme.primary,
+                color: "#ffffff"
+              }}
             >
               <div className="flex items-center gap-3">
                 <div className="relative">
                   <ShoppingCart className="w-6 h-6" />
-                  <span className="absolute -top-2 -right-2 w-5 h-5 bg-white text-violet-600 rounded-full text-xs font-bold flex items-center justify-center">
+                  <span
+                    className="absolute -top-2 -right-2 w-5 h-5 rounded-full text-xs font-bold flex items-center justify-center"
+                    style={{
+                      backgroundColor: "#ffffff",
+                      color: theme.primary
+                    }}
+                  >
                     {totalItems}
                   </span>
                 </div>

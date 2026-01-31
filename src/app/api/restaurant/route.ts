@@ -142,7 +142,19 @@ export async function PUT(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { name, description, currency, logoUrl } = body;
+    const {
+      name,
+      description,
+      currency,
+      logoUrl,
+      menuTheme,
+      primaryColor,
+      accentColor,
+      backgroundColor,
+      textColor,
+      showItemImages,
+      orderingMode,
+    } = body;
 
     const updateData: Record<string, unknown> = {};
 
@@ -166,6 +178,36 @@ export async function PUT(request: NextRequest) {
 
     if (logoUrl !== undefined) {
       updateData.logoUrl = logoUrl || null;
+    }
+
+    // Theme settings
+    if (menuTheme !== undefined) {
+      updateData.menuTheme = menuTheme;
+    }
+
+    if (primaryColor !== undefined) {
+      updateData.primaryColor = primaryColor;
+    }
+
+    if (accentColor !== undefined) {
+      updateData.accentColor = accentColor;
+    }
+
+    if (backgroundColor !== undefined) {
+      updateData.backgroundColor = backgroundColor;
+    }
+
+    if (textColor !== undefined) {
+      updateData.textColor = textColor;
+    }
+
+    if (showItemImages !== undefined) {
+      updateData.showItemImages = showItemImages;
+    }
+
+    // Ordering mode
+    if (orderingMode !== undefined) {
+      updateData.orderingMode = orderingMode;
     }
 
     const updated = await prisma.restaurant.update({

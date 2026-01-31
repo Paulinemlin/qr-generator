@@ -264,6 +264,21 @@ model Badge {
 // QR MENU - RESTAURANT MODELS
 // ========================================
 
+enum MenuTheme {
+  DEFAULT
+  DARK
+  ELEGANT
+  VIBRANT
+  MINIMAL
+  CUSTOM
+}
+
+enum OrderingMode {
+  PAYMENT_REQUIRED  // Paiement Stripe obligatoire
+  CALL_WAITER       // Commander puis appeler le serveur
+  PAY_LATER         // Commander et payer plus tard
+}
+
 model Restaurant {
   id              String            @id @default(cuid())
   name            String
@@ -274,6 +289,15 @@ model Restaurant {
   // Stripe Connect
   stripeAccountId String?           @unique
   stripeOnboarded Boolean           @default(false)
+  // Theme du menu
+  menuTheme       MenuTheme         @default(DEFAULT)
+  primaryColor    String            @default("#7c3aed")   // violet-600
+  accentColor     String            @default("#8b5cf6")   // violet-500
+  backgroundColor String            @default("#f9fafb")   // gray-50
+  textColor       String            @default("#111827")   // gray-900
+  showItemImages  Boolean           @default(true)
+  // Mode de commande
+  orderingMode    OrderingMode      @default(CALL_WAITER)
   // Proprietaire
   ownerId         String
   owner           User              @relation(fields: [ownerId], references: [id], onDelete: Cascade)

@@ -11,6 +11,9 @@ import {
   Minus,
   Plus,
   Trash2,
+  Bell,
+  CreditCard,
+  Check,
 } from "lucide-react";
 import { loadStripe } from "@stripe/stripe-js";
 import {
@@ -25,11 +28,23 @@ const stripePromise = loadStripe(
   process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!
 );
 
+type OrderingMode = "PAYMENT_REQUIRED" | "CALL_WAITER" | "PAY_LATER";
+
+interface Restaurant {
+  id: string;
+  name: string;
+  slug: string;
+  currency: string;
+  canAcceptPayments: boolean;
+  orderingMode: OrderingMode;
+  primaryColor: string;
+}
+
 interface OrderResponse {
   orderId: string;
   orderNumber: string;
   totalInCents: number;
-  clientSecret: string;
+  clientSecret?: string;
   items: Array<{
     name: string;
     quantity: number;
@@ -42,10 +57,12 @@ function CheckoutForm({
   clientSecret,
   orderId,
   slug,
+  primaryColor,
 }: {
   clientSecret: string;
   orderId: string;
   slug: string;
+  primaryColor: string;
 }) {
   const stripe = useStripe();
   const elements = useElements();
@@ -102,7 +119,8 @@ function CheckoutForm({
       <button
         type="submit"
         disabled={!stripe || loading}
-        className="w-full bg-violet-600 text-white font-semibold py-4 rounded-xl hover:bg-violet-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+        className="w-full text-white font-semibold py-4 rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+        style={{ backgroundColor: primaryColor }}
       >
         {loading ? (
           <>
@@ -129,26 +147,48 @@ function CheckoutContent({ slug }: { slug: string }) {
     totalItems,
     totalInCents,
     isLoaded,
+    clear,
   } = useCart(slug, tableId);
 
+  const [restaurant, setRestaurant] = useState<Restaurant | null>(null);
   const [order, setOrder] = useState<OrderResponse | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
+  const [orderSuccess, setOrderSuccess] = useState(false);
+
+  // Fetch restaurant info
+  useEffect(() => {
+    async function fetchRestaurant() {
+      try {
+        const response = await fetch(`/api/menu/${slug}`);
+        const data = await response.json();
+        if (response.ok) {
+          setRestaurant(data.restaurant);
+        }
+      } catch {
+        // Ignore
+      } finally {
+        setLoading(false);
+      }
+    }
+    fetchRestaurant();
+  }, [slug]);
 
   // Redirect if cart is empty
   useEffect(() => {
-    if (isLoaded && items.length === 0 && !order) {
+    if (isLoaded && items.length === 0 && !order && !orderSuccess) {
       router.push(`/m/${slug}${tableId ? `?tableId=${tableId}` : ""}`);
     }
-  }, [isLoaded, items.length, order, router, slug, tableId]);
+  }, [isLoaded, items.length, order, orderSuccess, router, slug, tableId]);
 
-  const handleCreateOrder = async () => {
+  const handleCreateOrder = async (withPayment: boolean) => {
     if (!tableId) {
       setError("Table non specifiee");
       return;
     }
 
-    setLoading(true);
+    setSubmitting(true);
     setError("");
 
     try {
@@ -162,6 +202,7 @@ function CheckoutContent({ slug }: { slug: string }) {
             quantity: item.quantity,
             notes: item.notes,
           })),
+          withPayment,
         }),
       });
 
@@ -172,18 +213,88 @@ function CheckoutContent({ slug }: { slug: string }) {
         return;
       }
 
-      setOrder(data);
+      if (withPayment && data.clientSecret) {
+        setOrder(data);
+      } else {
+        // Order placed without payment - show success
+        clear();
+        setOrderSuccess(true);
+        setOrder(data);
+      }
     } catch {
       setError("Erreur de connexion");
     } finally {
-      setLoading(false);
+      setSubmitting(false);
     }
   };
 
-  if (!isLoaded) {
+  const primaryColor = restaurant?.primaryColor || "#7c3aed";
+
+  if (loading || !isLoaded) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <Loader2 className="w-8 h-8 animate-spin text-violet-600" />
+        <Loader2 className="w-8 h-8 animate-spin" style={{ color: primaryColor }} />
+      </div>
+    );
+  }
+
+  // Order success screen (for non-payment orders)
+  if (orderSuccess && order) {
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <header className="bg-white border-b sticky top-0 z-40">
+          <div className="max-w-lg mx-auto px-4 py-4">
+            <h1 className="font-bold text-lg text-center">Commande envoyee</h1>
+          </div>
+        </header>
+
+        <main className="max-w-lg mx-auto px-4 py-6">
+          <div className="bg-white rounded-xl shadow-sm border p-6 text-center">
+            <div
+              className="w-16 h-16 rounded-full mx-auto mb-4 flex items-center justify-center"
+              style={{ backgroundColor: `${primaryColor}20` }}
+            >
+              <Check className="w-8 h-8" style={{ color: primaryColor }} />
+            </div>
+            <h2 className="text-xl font-bold text-gray-900 mb-2">
+              Commande #{order.orderNumber}
+            </h2>
+            <p className="text-gray-600 mb-6">
+              {restaurant?.orderingMode === "CALL_WAITER"
+                ? "Votre commande a ete envoyee. Un serveur viendra prendre votre paiement."
+                : "Votre commande a ete envoyee. Vous pourrez payer a la fin du repas."}
+            </p>
+
+            <div className="border-t pt-4 mt-4">
+              <div className="divide-y text-left">
+                {order.items.map((item, idx) => (
+                  <div key={idx} className="py-2 flex justify-between text-sm">
+                    <span>
+                      {item.quantity}x {item.name}
+                    </span>
+                    <span className="font-medium">
+                      {formatPrice(item.subtotal, restaurant?.currency)}
+                    </span>
+                  </div>
+                ))}
+              </div>
+              <div className="pt-3 mt-2 border-t flex justify-between">
+                <span className="font-semibold">Total</span>
+                <span className="font-bold" style={{ color: primaryColor }}>
+                  {formatPrice(order.totalInCents, restaurant?.currency)}
+                </span>
+              </div>
+            </div>
+
+            <Link
+              href={`/m/${slug}${tableId ? `?tableId=${tableId}` : ""}`}
+              className="mt-6 inline-block text-sm hover:underline"
+              style={{ color: primaryColor }}
+            >
+              Retour au menu
+            </Link>
+          </div>
+        </main>
       </div>
     );
   }
@@ -225,11 +336,11 @@ function CheckoutContent({ slug }: { slug: string }) {
                     <div className="flex-1">
                       <h3 className="font-medium text-gray-900">{item.name}</h3>
                       <p className="text-sm text-gray-500 mt-1">
-                        {formatPrice(item.priceInCents)} x {item.quantity}
+                        {formatPrice(item.priceInCents, restaurant?.currency)} x {item.quantity}
                       </p>
                     </div>
-                    <p className="font-semibold text-violet-600">
-                      {formatPrice(item.priceInCents * item.quantity)}
+                    <p className="font-semibold" style={{ color: primaryColor }}>
+                      {formatPrice(item.priceInCents * item.quantity, restaurant?.currency)}
                     </p>
                   </div>
 
@@ -258,7 +369,8 @@ function CheckoutContent({ slug }: { slug: string }) {
                         onClick={() =>
                           updateQuantity(item.menuItemId, item.quantity + 1)
                         }
-                        className="w-7 h-7 rounded-full bg-violet-600 text-white flex items-center justify-center hover:bg-violet-700"
+                        className="w-7 h-7 rounded-full text-white flex items-center justify-center"
+                        style={{ backgroundColor: primaryColor }}
                       >
                         <Plus className="w-3 h-3" />
                       </button>
@@ -272,30 +384,77 @@ function CheckoutContent({ slug }: { slug: string }) {
             <div className="mt-6 bg-white rounded-xl shadow-sm border p-4">
               <div className="flex justify-between items-center">
                 <span className="font-medium text-gray-700">Total</span>
-                <span className="text-xl font-bold text-violet-600">
-                  {formatPrice(totalInCents)}
+                <span className="text-xl font-bold" style={{ color: primaryColor }}>
+                  {formatPrice(totalInCents, restaurant?.currency)}
                 </span>
               </div>
             </div>
 
-            {/* Proceed to payment */}
-            <button
-              onClick={handleCreateOrder}
-              disabled={loading || totalItems === 0 || !tableId}
-              className="mt-6 w-full bg-violet-600 text-white font-semibold py-4 rounded-xl hover:bg-violet-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-            >
-              {loading ? (
-                <>
-                  <Loader2 className="w-5 h-5 animate-spin" />
-                  Creation de la commande...
-                </>
-              ) : (
-                <>
-                  <ShoppingCart className="w-5 h-5" />
-                  Proceder au paiement
-                </>
+            {/* Action buttons based on ordering mode */}
+            <div className="mt-6 space-y-3">
+              {restaurant?.orderingMode === "PAYMENT_REQUIRED" && restaurant.canAcceptPayments && (
+                <button
+                  onClick={() => handleCreateOrder(true)}
+                  disabled={submitting || totalItems === 0 || !tableId}
+                  className="w-full text-white font-semibold py-4 rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                  style={{ backgroundColor: primaryColor }}
+                >
+                  {submitting ? (
+                    <>
+                      <Loader2 className="w-5 h-5 animate-spin" />
+                      Creation de la commande...
+                    </>
+                  ) : (
+                    <>
+                      <CreditCard className="w-5 h-5" />
+                      Proceder au paiement
+                    </>
+                  )}
+                </button>
               )}
-            </button>
+
+              {restaurant?.orderingMode === "CALL_WAITER" && (
+                <button
+                  onClick={() => handleCreateOrder(false)}
+                  disabled={submitting || totalItems === 0 || !tableId}
+                  className="w-full text-white font-semibold py-4 rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                  style={{ backgroundColor: primaryColor }}
+                >
+                  {submitting ? (
+                    <>
+                      <Loader2 className="w-5 h-5 animate-spin" />
+                      Envoi de la commande...
+                    </>
+                  ) : (
+                    <>
+                      <Bell className="w-5 h-5" />
+                      Commander et appeler un serveur
+                    </>
+                  )}
+                </button>
+              )}
+
+              {restaurant?.orderingMode === "PAY_LATER" && (
+                <button
+                  onClick={() => handleCreateOrder(false)}
+                  disabled={submitting || totalItems === 0 || !tableId}
+                  className="w-full text-white font-semibold py-4 rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                  style={{ backgroundColor: primaryColor }}
+                >
+                  {submitting ? (
+                    <>
+                      <Loader2 className="w-5 h-5 animate-spin" />
+                      Envoi de la commande...
+                    </>
+                  ) : (
+                    <>
+                      <ShoppingCart className="w-5 h-5" />
+                      Commander (payer plus tard)
+                    </>
+                  )}
+                </button>
+              )}
+            </div>
 
             {!tableId && (
               <p className="mt-4 text-center text-sm text-red-500">
@@ -317,41 +476,44 @@ function CheckoutContent({ slug }: { slug: string }) {
                       {item.quantity}x {item.name}
                     </span>
                     <span className="font-medium">
-                      {formatPrice(item.subtotal)}
+                      {formatPrice(item.subtotal, restaurant?.currency)}
                     </span>
                   </div>
                 ))}
               </div>
               <div className="pt-3 mt-2 border-t flex justify-between">
                 <span className="font-semibold">Total</span>
-                <span className="font-bold text-violet-600">
-                  {formatPrice(order.totalInCents)}
+                <span className="font-bold" style={{ color: primaryColor }}>
+                  {formatPrice(order.totalInCents, restaurant?.currency)}
                 </span>
               </div>
             </div>
 
             {/* Stripe Payment Element */}
-            <div className="bg-white rounded-xl shadow-sm border p-4">
-              <Elements
-                stripe={stripePromise}
-                options={{
-                  clientSecret: order.clientSecret,
-                  appearance: {
-                    theme: "stripe",
-                    variables: {
-                      colorPrimary: "#7c3aed",
-                      borderRadius: "8px",
+            {order.clientSecret && (
+              <div className="bg-white rounded-xl shadow-sm border p-4">
+                <Elements
+                  stripe={stripePromise}
+                  options={{
+                    clientSecret: order.clientSecret,
+                    appearance: {
+                      theme: "stripe",
+                      variables: {
+                        colorPrimary: primaryColor,
+                        borderRadius: "8px",
+                      },
                     },
-                  },
-                }}
-              >
-                <CheckoutForm
-                  clientSecret={order.clientSecret}
-                  orderId={order.orderId}
-                  slug={slug}
-                />
-              </Elements>
-            </div>
+                  }}
+                >
+                  <CheckoutForm
+                    clientSecret={order.clientSecret}
+                    orderId={order.orderId}
+                    slug={slug}
+                    primaryColor={primaryColor}
+                  />
+                </Elements>
+              </div>
+            )}
           </>
         )}
       </main>

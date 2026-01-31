@@ -9,14 +9,15 @@ interface OrderItemInput {
   notes?: string;
 }
 
-// POST /api/orders - Create order + PaymentIntent
+// POST /api/orders - Create order (with or without payment)
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { tableId, items, notes } = body as {
+    const { tableId, items, notes, withPayment } = body as {
       tableId: string;
       items: OrderItemInput[];
       notes?: string;
+      withPayment?: boolean;
     };
 
     // Validate input
@@ -59,12 +60,19 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Check if restaurant can accept payments
-    if (!table.restaurant.stripeOnboarded || !table.restaurant.stripeAccountId) {
-      return NextResponse.json(
-        { error: "Le restaurant ne peut pas accepter les paiements" },
-        { status: 400 }
-      );
+    const { restaurant } = table;
+
+    // Check if payment is required
+    const requiresPayment = withPayment === true && restaurant.orderingMode === "PAYMENT_REQUIRED";
+
+    // If payment is required, verify Stripe is set up
+    if (requiresPayment) {
+      if (!restaurant.stripeOnboarded || !restaurant.stripeAccountId) {
+        return NextResponse.json(
+          { error: "Le restaurant ne peut pas accepter les paiements" },
+          { status: 400 }
+        );
+      }
     }
 
     // Get menu items and calculate total (server-side validation)
@@ -112,8 +120,8 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // Minimum order amount (Stripe requires at least 50 cents for most currencies)
-    if (totalInCents < 50) {
+    // Minimum order amount for Stripe payments
+    if (requiresPayment && totalInCents < 50) {
       return NextResponse.json(
         { error: "Le montant minimum de commande est de 0,50€" },
         { status: 400 }
@@ -123,6 +131,11 @@ export async function POST(request: NextRequest) {
     // Generate order number
     const orderNumber = `ORD-${nanoid(6).toUpperCase()}`;
 
+    // Determine initial status based on ordering mode
+    // PAYMENT_REQUIRED: PENDING (waiting for payment)
+    // CALL_WAITER / PAY_LATER: PREPARING (order is immediately sent to kitchen)
+    const initialStatus = requiresPayment ? "PENDING" : "PREPARING";
+
     // Create order
     const order = await prisma.order.create({
       data: {
@@ -131,6 +144,7 @@ export async function POST(request: NextRequest) {
         restaurantId: table.restaurantId,
         totalInCents,
         notes: notes?.trim() || null,
+        status: initialStatus,
         items: {
           create: orderItems,
         },
@@ -148,39 +162,45 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    // Create Stripe PaymentIntent
-    const stripe = getStripe();
+    // Create Stripe PaymentIntent only if payment is required
+    let clientSecret: string | undefined;
 
-    const paymentIntent = await stripe.paymentIntents.create({
-      amount: totalInCents,
-      currency: table.restaurant.currency.toLowerCase(),
-      automatic_payment_methods: {
-        enabled: true,
-      },
-      transfer_data: {
-        destination: table.restaurant.stripeAccountId,
-      },
-      metadata: {
-        orderId: order.id,
-        orderNumber: order.orderNumber,
-        restaurantId: table.restaurantId,
-        tableNumber: table.tableNumber,
-      },
-    });
+    if (requiresPayment && restaurant.stripeAccountId) {
+      const stripe = getStripe();
 
-    // Update order with PaymentIntent ID
-    await prisma.order.update({
-      where: { id: order.id },
-      data: {
-        stripePaymentIntentId: paymentIntent.id,
-      },
-    });
+      const paymentIntent = await stripe.paymentIntents.create({
+        amount: totalInCents,
+        currency: restaurant.currency.toLowerCase(),
+        automatic_payment_methods: {
+          enabled: true,
+        },
+        transfer_data: {
+          destination: restaurant.stripeAccountId,
+        },
+        metadata: {
+          orderId: order.id,
+          orderNumber: order.orderNumber,
+          restaurantId: table.restaurantId,
+          tableNumber: table.tableNumber,
+        },
+      });
+
+      // Update order with PaymentIntent ID
+      await prisma.order.update({
+        where: { id: order.id },
+        data: {
+          stripePaymentIntentId: paymentIntent.id,
+        },
+      });
+
+      clientSecret = paymentIntent.client_secret ?? undefined;
+    }
 
     return NextResponse.json({
       orderId: order.id,
       orderNumber: order.orderNumber,
       totalInCents,
-      clientSecret: paymentIntent.client_secret,
+      clientSecret,
       items: order.items.map((item) => ({
         name: item.menuItem.name,
         quantity: item.quantity,

@@ -21,6 +21,15 @@ export async function GET(
         logoUrl: true,
         currency: true,
         stripeOnboarded: true,
+        // Theme settings
+        menuTheme: true,
+        primaryColor: true,
+        accentColor: true,
+        backgroundColor: true,
+        textColor: true,
+        showItemImages: true,
+        // Ordering mode
+        orderingMode: true,
         categories: {
           where: { isActive: true },
           orderBy: { sortOrder: "asc" },
@@ -78,6 +87,15 @@ export async function GET(
         logoUrl: restaurant.logoUrl,
         currency: restaurant.currency,
         canAcceptPayments,
+        // Theme settings
+        menuTheme: restaurant.menuTheme,
+        primaryColor: restaurant.primaryColor,
+        accentColor: restaurant.accentColor,
+        backgroundColor: restaurant.backgroundColor,
+        textColor: restaurant.textColor,
+        showItemImages: restaurant.showItemImages,
+        // Ordering mode
+        orderingMode: restaurant.orderingMode,
       },
       categories: restaurant.categories,
       table,
