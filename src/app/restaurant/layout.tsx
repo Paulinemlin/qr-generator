@@ -7,12 +7,14 @@ import {
   QrCode,
   ClipboardList,
   Settings,
+  Users,
 } from "lucide-react";
 
 const navItems = [
   { href: "/restaurant", label: "Dashboard", icon: LayoutDashboard },
   { href: "/restaurant/menu", label: "Menu", icon: UtensilsCrossed },
   { href: "/restaurant/tables", label: "Tables", icon: QrCode },
+  { href: "/restaurant/salle", label: "Vue Salle", icon: Users },
   { href: "/restaurant/orders", label: "Commandes", icon: ClipboardList },
   { href: "/restaurant/settings", label: "Parametres", icon: Settings },
 ];
