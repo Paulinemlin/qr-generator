@@ -47,6 +47,7 @@ export async function GET(
                 description: true,
                 priceInCents: true,
                 imageUrl: true,
+                allergens: true,
               },
             },
           },

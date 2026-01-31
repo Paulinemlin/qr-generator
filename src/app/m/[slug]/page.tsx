@@ -11,6 +11,7 @@ import {
   Loader2,
   ChefHat,
   AlertCircle,
+  X,
 } from "lucide-react";
 import { useCart, formatPrice } from "@/lib/cart";
 
@@ -20,7 +21,37 @@ interface MenuItem {
   description: string | null;
   priceInCents: number;
   imageUrl: string | null;
+  allergens?: string[];
 }
+
+// 14 allergens EU + dietary labels
+const ALLERGENS = [
+  { id: "gluten", label: "Gluten", icon: "🌾" },
+  { id: "crustaces", label: "Crustacés", icon: "🦐" },
+  { id: "oeufs", label: "Œufs", icon: "🥚" },
+  { id: "poisson", label: "Poisson", icon: "🐟" },
+  { id: "arachides", label: "Arachides", icon: "🥜" },
+  { id: "soja", label: "Soja", icon: "🫘" },
+  { id: "lait", label: "Lait", icon: "🥛" },
+  { id: "fruits-coques", label: "Fruits à coque", icon: "🌰" },
+  { id: "celeri", label: "Céleri", icon: "🥬" },
+  { id: "moutarde", label: "Moutarde", icon: "🟡" },
+  { id: "sesame", label: "Sésame", icon: "⚪" },
+  { id: "sulfites", label: "Sulfites", icon: "🍷" },
+  { id: "lupin", label: "Lupin", icon: "🌸" },
+  { id: "mollusques", label: "Mollusques", icon: "🦪" },
+];
+
+const DIETS = [
+  { id: "vegetarien", label: "Végétarien", icon: "🥬", color: "bg-green-100 text-green-700" },
+  { id: "vegan", label: "Végan", icon: "🌱", color: "bg-emerald-100 text-emerald-700" },
+  { id: "sans-gluten", label: "Sans gluten", icon: "🌾", color: "bg-amber-100 text-amber-700" },
+  { id: "halal", label: "Halal", icon: "☪️", color: "bg-blue-100 text-blue-700" },
+  { id: "casher", label: "Casher", icon: "✡️", color: "bg-indigo-100 text-indigo-700" },
+  { id: "bio", label: "Bio", icon: "🌿", color: "bg-lime-100 text-lime-700" },
+  { id: "fait-maison", label: "Fait maison", icon: "👨‍🍳", color: "bg-orange-100 text-orange-700" },
+  { id: "epice", label: "Épicé", icon: "🌶️", color: "bg-red-100 text-red-700" },
+];
 
 interface Category {
   id: string;
@@ -100,6 +131,7 @@ function MenuContent({ slug }: { slug: string }) {
   const [error, setError] = useState("");
   const [activeCategory, setActiveCategory] = useState<string | null>(null);
   const [addingItem, setAddingItem] = useState<string | null>(null);
+  const [selectedItem, setSelectedItem] = useState<MenuItem | null>(null);
 
   const { items, addItem, updateQuantity, totalItems, totalInCents, isLoaded } =
     useCart(slug, tableId);
@@ -337,14 +369,19 @@ function MenuContent({ slug }: { slug: string }) {
                 const isAdding = addingItem === item.id;
                 const showImage = restaurant.showItemImages && item.imageUrl;
 
+                // Get diet/allergen icons for this item
+                const itemDiets = item.allergens?.filter(id => DIETS.some(d => d.id === id)) || [];
+                const itemAllergens = item.allergens?.filter(id => ALLERGENS.some(a => a.id === id)) || [];
+
                 return (
                   <div
                     key={item.id}
-                    className="rounded-xl p-4 shadow-sm border"
+                    className="rounded-xl p-4 shadow-sm border cursor-pointer transition-shadow hover:shadow-md"
                     style={{
                       backgroundColor: isDarkTheme ? "#1f2937" : "#ffffff",
                       borderColor: isDarkTheme ? "#374151" : "#e5e7eb"
                     }}
+                    onClick={() => setSelectedItem(item)}
                   >
                     <div className="flex gap-4">
                       {showImage && (
@@ -357,12 +394,27 @@ function MenuContent({ slug }: { slug: string }) {
                         />
                       )}
                       <div className="flex-1 min-w-0">
-                        <h3
-                          className="font-semibold"
-                          style={{ color: isDarkTheme ? "#f9fafb" : theme.text }}
-                        >
-                          {item.name}
-                        </h3>
+                        <div className="flex items-start justify-between gap-2">
+                          <h3
+                            className="font-semibold"
+                            style={{ color: isDarkTheme ? "#f9fafb" : theme.text }}
+                          >
+                            {item.name}
+                          </h3>
+                          {/* Diet icons */}
+                          {itemDiets.length > 0 && (
+                            <div className="flex gap-0.5 flex-shrink-0">
+                              {itemDiets.slice(0, 3).map(id => {
+                                const diet = DIETS.find(d => d.id === id);
+                                return diet ? (
+                                  <span key={id} className="text-sm" title={diet.label}>
+                                    {diet.icon}
+                                  </span>
+                                ) : null;
+                              })}
+                            </div>
+                          )}
+                        </div>
                         {item.description && (
                           <p
                             className="text-sm mt-1 line-clamp-2"
@@ -371,20 +423,34 @@ function MenuContent({ slug }: { slug: string }) {
                             {item.description}
                           </p>
                         )}
-                        <p
-                          className="font-bold mt-2"
-                          style={{ color: theme.primary }}
-                        >
-                          {formatPrice(item.priceInCents, restaurant.currency)}
-                        </p>
+                        <div className="flex items-center gap-2 mt-2">
+                          <p
+                            className="font-bold"
+                            style={{ color: theme.primary }}
+                          >
+                            {formatPrice(item.priceInCents, restaurant.currency)}
+                          </p>
+                          {/* Allergen count indicator */}
+                          {itemAllergens.length > 0 && (
+                            <span
+                              className="text-xs px-2 py-0.5 rounded-full"
+                              style={{
+                                backgroundColor: isDarkTheme ? "#374151" : "#fef2f2",
+                                color: isDarkTheme ? "#fca5a5" : "#991b1b"
+                              }}
+                            >
+                              {itemAllergens.length} allergène{itemAllergens.length > 1 ? "s" : ""}
+                            </span>
+                          )}
+                        </div>
                       </div>
                     </div>
 
                     {/* Quantity controls */}
-                    <div className="mt-3 flex justify-end">
+                    <div className="mt-3 flex justify-end" onClick={(e) => e.stopPropagation()}>
                       {quantity === 0 ? (
                         <button
-                          onClick={() => handleAddItem(item)}
+                          onClick={(e) => { e.stopPropagation(); handleAddItem(item); }}
                           disabled={!orderingEnabled}
                           className="flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium transition-all"
                           style={{
@@ -407,9 +473,10 @@ function MenuContent({ slug }: { slug: string }) {
                           style={{ backgroundColor: isDarkTheme ? "#374151" : "#f3f4f6" }}
                         >
                           <button
-                            onClick={() =>
-                              updateQuantity(item.id, quantity - 1)
-                            }
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              updateQuantity(item.id, quantity - 1);
+                            }}
                             className="w-8 h-8 rounded-full shadow flex items-center justify-center"
                             style={{
                               backgroundColor: isDarkTheme ? "#1f2937" : "#ffffff",
@@ -425,9 +492,10 @@ function MenuContent({ slug }: { slug: string }) {
                             {quantity}
                           </span>
                           <button
-                            onClick={() =>
-                              updateQuantity(item.id, quantity + 1)
-                            }
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              updateQuantity(item.id, quantity + 1);
+                            }}
                             className="w-8 h-8 rounded-full text-white flex items-center justify-center"
                             style={{ backgroundColor: theme.primary }}
                           >
@@ -489,6 +557,195 @@ function MenuContent({ slug }: { slug: string }) {
                 {formatPrice(totalInCents, restaurant.currency)}
               </span>
             </Link>
+          </div>
+        </div>
+      )}
+
+      {/* Item Detail Modal */}
+      {selectedItem && (
+        <div
+          className="fixed inset-0 bg-black/60 flex items-end sm:items-center justify-center z-50"
+          onClick={() => setSelectedItem(null)}
+        >
+          <div
+            className="w-full max-w-lg max-h-[85vh] overflow-hidden rounded-t-2xl sm:rounded-2xl"
+            style={{
+              backgroundColor: isDarkTheme ? "#1f2937" : "#ffffff",
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Image */}
+            {selectedItem.imageUrl && (
+              <div className="relative h-48 sm:h-56">
+                <Image
+                  src={selectedItem.imageUrl}
+                  alt={selectedItem.name}
+                  fill
+                  className="object-cover"
+                />
+                <button
+                  onClick={() => setSelectedItem(null)}
+                  className="absolute top-3 right-3 w-8 h-8 rounded-full bg-black/50 text-white flex items-center justify-center"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+            )}
+
+            {/* Content */}
+            <div className="p-5 overflow-y-auto" style={{ maxHeight: selectedItem.imageUrl ? "calc(85vh - 14rem)" : "85vh" }}>
+              {/* Close button if no image */}
+              {!selectedItem.imageUrl && (
+                <div className="flex justify-end mb-2">
+                  <button
+                    onClick={() => setSelectedItem(null)}
+                    className="w-8 h-8 rounded-full flex items-center justify-center"
+                    style={{ backgroundColor: isDarkTheme ? "#374151" : "#f3f4f6" }}
+                  >
+                    <X className="w-5 h-5" style={{ color: isDarkTheme ? "#d1d5db" : "#374151" }} />
+                  </button>
+                </div>
+              )}
+
+              {/* Title & Price */}
+              <div className="flex items-start justify-between gap-4 mb-4">
+                <h2
+                  className="text-xl font-bold"
+                  style={{ color: isDarkTheme ? "#f9fafb" : theme.text }}
+                >
+                  {selectedItem.name}
+                </h2>
+                <p
+                  className="text-xl font-bold flex-shrink-0"
+                  style={{ color: theme.primary }}
+                >
+                  {formatPrice(selectedItem.priceInCents, restaurant.currency)}
+                </p>
+              </div>
+
+              {/* Description */}
+              {selectedItem.description && (
+                <p
+                  className="mb-4"
+                  style={{ color: isDarkTheme ? "#d1d5db" : "#4b5563" }}
+                >
+                  {selectedItem.description}
+                </p>
+              )}
+
+              {/* Diets */}
+              {(() => {
+                const diets = selectedItem.allergens?.filter(id => DIETS.some(d => d.id === id)) || [];
+                if (diets.length === 0) return null;
+                return (
+                  <div className="mb-4">
+                    <p
+                      className="text-sm font-medium mb-2"
+                      style={{ color: isDarkTheme ? "#9ca3af" : "#6b7280" }}
+                    >
+                      Régimes & Labels
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      {diets.map(id => {
+                        const diet = DIETS.find(d => d.id === id);
+                        return diet ? (
+                          <span
+                            key={id}
+                            className="px-3 py-1.5 rounded-full text-sm font-medium flex items-center gap-1.5"
+                            style={{
+                              backgroundColor: isDarkTheme ? "#374151" : "#f3f4f6",
+                              color: isDarkTheme ? "#d1d5db" : "#374151"
+                            }}
+                          >
+                            <span>{diet.icon}</span>
+                            <span>{diet.label}</span>
+                          </span>
+                        ) : null;
+                      })}
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {/* Allergens */}
+              {(() => {
+                const allergens = selectedItem.allergens?.filter(id => ALLERGENS.some(a => a.id === id)) || [];
+                if (allergens.length === 0) return null;
+                return (
+                  <div className="mb-4">
+                    <p
+                      className="text-sm font-medium mb-2"
+                      style={{ color: isDarkTheme ? "#9ca3af" : "#6b7280" }}
+                    >
+                      Allergènes présents
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      {allergens.map(id => {
+                        const allergen = ALLERGENS.find(a => a.id === id);
+                        return allergen ? (
+                          <span
+                            key={id}
+                            className="px-3 py-1.5 rounded-lg text-sm flex items-center gap-1.5"
+                            style={{
+                              backgroundColor: isDarkTheme ? "#7f1d1d" : "#fef2f2",
+                              color: isDarkTheme ? "#fca5a5" : "#991b1b"
+                            }}
+                          >
+                            <span>{allergen.icon}</span>
+                            <span>{allergen.label}</span>
+                          </span>
+                        ) : null;
+                      })}
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {/* Add to cart button */}
+              {orderingEnabled && (
+                <div className="mt-6">
+                  {getItemQuantity(selectedItem.id) === 0 ? (
+                    <button
+                      onClick={() => {
+                        handleAddItem(selectedItem);
+                        setSelectedItem(null);
+                      }}
+                      className="w-full py-3 rounded-full font-semibold text-white flex items-center justify-center gap-2"
+                      style={{ backgroundColor: theme.primary }}
+                    >
+                      <Plus className="w-5 h-5" />
+                      Ajouter au panier
+                    </button>
+                  ) : (
+                    <div className="flex items-center justify-center gap-4">
+                      <button
+                        onClick={() => updateQuantity(selectedItem.id, getItemQuantity(selectedItem.id) - 1)}
+                        className="w-12 h-12 rounded-full shadow flex items-center justify-center"
+                        style={{
+                          backgroundColor: isDarkTheme ? "#374151" : "#f3f4f6",
+                          color: isDarkTheme ? "#d1d5db" : "#374151"
+                        }}
+                      >
+                        <Minus className="w-5 h-5" />
+                      </button>
+                      <span
+                        className="text-xl font-bold w-8 text-center"
+                        style={{ color: isDarkTheme ? "#f9fafb" : theme.text }}
+                      >
+                        {getItemQuantity(selectedItem.id)}
+                      </span>
+                      <button
+                        onClick={() => updateQuantity(selectedItem.id, getItemQuantity(selectedItem.id) + 1)}
+                        className="w-12 h-12 rounded-full text-white flex items-center justify-center"
+                        style={{ backgroundColor: theme.primary }}
+                      >
+                        <Plus className="w-5 h-5" />
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
         </div>
       )}
