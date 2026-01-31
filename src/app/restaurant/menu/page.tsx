@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import {
   Loader2,
   Plus,
@@ -11,8 +11,18 @@ import {
   EyeOff,
   ChevronDown,
   ChevronUp,
+  Upload,
+  Download,
+  Tag,
+  X,
 } from "lucide-react";
 import { formatPrice } from "@/lib/cart";
+
+interface MenuTag {
+  id: string;
+  name: string;
+  color: string;
+}
 
 interface MenuItem {
   id: string;
@@ -22,6 +32,7 @@ interface MenuItem {
   imageUrl: string | null;
   isAvailable: boolean;
   sortOrder: number;
+  tags?: MenuTag[];
 }
 
 interface Category {
@@ -36,6 +47,7 @@ interface Category {
 
 export default function MenuPage() {
   const [categories, setCategories] = useState<Category[]>([]);
+  const [tags, setTags] = useState<MenuTag[]>([]);
   const [loading, setLoading] = useState(true);
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(
     new Set()
@@ -44,6 +56,7 @@ export default function MenuPage() {
   // Modal states
   const [showCategoryModal, setShowCategoryModal] = useState(false);
   const [showItemModal, setShowItemModal] = useState(false);
+  const [showImportModal, setShowImportModal] = useState(false);
   const [editingCategory, setEditingCategory] = useState<Category | null>(null);
   const [editingItem, setEditingItem] = useState<MenuItem | null>(null);
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(
@@ -57,20 +70,29 @@ export default function MenuPage() {
   const [itemDescription, setItemDescription] = useState("");
   const [itemPrice, setItemPrice] = useState("");
   const [itemCategoryId, setItemCategoryId] = useState("");
+  const [itemTagIds, setItemTagIds] = useState<string[]>([]);
+  const [newTagName, setNewTagName] = useState("");
   const [saving, setSaving] = useState(false);
 
-  useEffect(() => {
-    fetchCategories();
-  }, []);
+  // Import states
+  const [importFile, setImportFile] = useState<File | null>(null);
+  const [importing, setImporting] = useState(false);
+  const [importResult, setImportResult] = useState<{
+    success: boolean;
+    created: number;
+    categoriesCreated: number;
+    tagsCreated: number;
+    errors: { row: number; error: string }[];
+  } | null>(null);
 
-  async function fetchCategories() {
+  const fetchCategories = useCallback(async () => {
     try {
       const response = await fetch("/api/restaurant/categories");
       const data = await response.json();
       if (data.categories) {
         setCategories(data.categories);
         // Expand first category by default
-        if (data.categories.length > 0) {
+        if (data.categories.length > 0 && expandedCategories.size === 0) {
           setExpandedCategories(new Set([data.categories[0].id]));
         }
       }
@@ -79,7 +101,24 @@ export default function MenuPage() {
     } finally {
       setLoading(false);
     }
-  }
+  }, [expandedCategories.size]);
+
+  const fetchTags = useCallback(async () => {
+    try {
+      const response = await fetch("/api/restaurant/tags");
+      const data = await response.json();
+      if (data.tags) {
+        setTags(data.tags);
+      }
+    } catch (error) {
+      console.error("Error fetching tags:", error);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchCategories();
+    fetchTags();
+  }, [fetchCategories, fetchTags]);
 
   function toggleCategory(id: string) {
     setExpandedCategories((prev) => {
@@ -114,13 +153,16 @@ export default function MenuPage() {
       setItemDescription(item.description || "");
       setItemPrice((item.priceInCents / 100).toFixed(2));
       setItemCategoryId(categoryId);
+      setItemTagIds(item.tags?.map((t) => t.id) || []);
     } else {
       setEditingItem(null);
       setItemName("");
       setItemDescription("");
       setItemPrice("");
       setItemCategoryId(categoryId);
+      setItemTagIds([]);
     }
+    setNewTagName("");
     setShowItemModal(true);
   }
 
@@ -181,6 +223,7 @@ export default function MenuPage() {
           description: itemDescription || null,
           priceInCents: Math.round(parseFloat(itemPrice) * 100),
           categoryId: itemCategoryId,
+          tagIds: itemTagIds,
         }),
       });
 
@@ -190,6 +233,81 @@ export default function MenuPage() {
       console.error("Error saving item:", error);
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function handleCreateTag() {
+    if (!newTagName.trim()) return;
+
+    try {
+      const response = await fetch("/api/restaurant/tags", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: newTagName.trim() }),
+      });
+      const data = await response.json();
+
+      if (data.tag) {
+        setTags((prev) => [...prev, data.tag]);
+        setItemTagIds((prev) => [...prev, data.tag.id]);
+        setNewTagName("");
+      } else if (response.status === 409 && data.tag) {
+        // Tag already exists, just add it
+        setItemTagIds((prev) => [...prev, data.tag.id]);
+        setNewTagName("");
+      }
+    } catch (error) {
+      console.error("Error creating tag:", error);
+    }
+  }
+
+  function toggleTag(tagId: string) {
+    setItemTagIds((prev) =>
+      prev.includes(tagId) ? prev.filter((id) => id !== tagId) : [...prev, tagId]
+    );
+  }
+
+  async function handleImport() {
+    if (!importFile) return;
+
+    setImporting(true);
+    setImportResult(null);
+
+    try {
+      const formData = new FormData();
+      formData.append("file", importFile);
+
+      const response = await fetch("/api/restaurant/menu/import", {
+        method: "POST",
+        body: formData,
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        setImportResult(data);
+        fetchCategories();
+        fetchTags();
+      } else {
+        setImportResult({
+          success: false,
+          created: 0,
+          categoriesCreated: 0,
+          tagsCreated: 0,
+          errors: [{ row: 0, error: data.error }],
+        });
+      }
+    } catch (error) {
+      console.error("Error importing menu:", error);
+      setImportResult({
+        success: false,
+        created: 0,
+        categoriesCreated: 0,
+        tagsCreated: 0,
+        errors: [{ row: 0, error: "Erreur lors de l'import" }],
+      });
+    } finally {
+      setImporting(false);
     }
   }
 
@@ -228,13 +346,22 @@ export default function MenuPage() {
           <h1 className="text-2xl font-bold text-gray-900">Menu</h1>
           <p className="text-gray-500">Gerez vos categories et plats</p>
         </div>
-        <button
-          onClick={() => openCategoryModal()}
-          className="flex items-center gap-2 px-4 py-2 bg-violet-600 text-white rounded-lg hover:bg-violet-700"
-        >
-          <Plus className="w-4 h-4" />
-          Categorie
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setShowImportModal(true)}
+            className="flex items-center gap-2 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50"
+          >
+            <Upload className="w-4 h-4" />
+            Importer
+          </button>
+          <button
+            onClick={() => openCategoryModal()}
+            className="flex items-center gap-2 px-4 py-2 bg-violet-600 text-white rounded-lg hover:bg-violet-700"
+          >
+            <Plus className="w-4 h-4" />
+            Categorie
+          </button>
+        </div>
       </div>
 
       {categories.length === 0 ? (
@@ -323,11 +450,26 @@ export default function MenuPage() {
                         <div className="flex items-center gap-3">
                           <GripVertical className="w-4 h-4 text-gray-300" />
                           <div>
-                            <p
-                              className={`font-medium ${!item.isAvailable ? "text-gray-400" : ""}`}
-                            >
-                              {item.name}
-                            </p>
+                            <div className="flex items-center gap-2">
+                              <p
+                                className={`font-medium ${!item.isAvailable ? "text-gray-400" : ""}`}
+                              >
+                                {item.name}
+                              </p>
+                              {item.tags && item.tags.length > 0 && (
+                                <div className="flex gap-1">
+                                  {item.tags.map((tag) => (
+                                    <span
+                                      key={tag.id}
+                                      className="px-1.5 py-0.5 text-xs rounded-full text-white"
+                                      style={{ backgroundColor: tag.color }}
+                                    >
+                                      {tag.name}
+                                    </span>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
                             {item.description && (
                               <p className="text-sm text-gray-500 line-clamp-1">
                                 {item.description}
@@ -490,6 +632,55 @@ export default function MenuPage() {
                     ))}
                   </select>
                 </div>
+                <div>
+                  <label className="block text-sm font-medium mb-1">
+                    Tags
+                  </label>
+                  <div className="flex flex-wrap gap-2 mb-2">
+                    {tags.map((tag) => (
+                      <button
+                        key={tag.id}
+                        type="button"
+                        onClick={() => toggleTag(tag.id)}
+                        className={`px-2 py-1 text-xs rounded-full transition-all ${
+                          itemTagIds.includes(tag.id)
+                            ? "text-white ring-2 ring-offset-1"
+                            : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                        }`}
+                        style={
+                          itemTagIds.includes(tag.id)
+                            ? { backgroundColor: tag.color, "--tw-ring-color": tag.color } as React.CSSProperties
+                            : {}
+                        }
+                      >
+                        {tag.name}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={newTagName}
+                      onChange={(e) => setNewTagName(e.target.value)}
+                      placeholder="Nouveau tag..."
+                      className="flex-1 px-3 py-1.5 text-sm border rounded-lg"
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          handleCreateTag();
+                        }
+                      }}
+                    />
+                    <button
+                      type="button"
+                      onClick={handleCreateTag}
+                      disabled={!newTagName.trim()}
+                      className="px-3 py-1.5 text-sm bg-gray-100 rounded-lg hover:bg-gray-200 disabled:opacity-50"
+                    >
+                      <Tag className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
               </div>
               <div className="flex gap-3 mt-6">
                 <button
@@ -508,6 +699,165 @@ export default function MenuPage() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Import Modal */}
+      {showImportModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-xl p-6 w-full max-w-lg">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-xl font-bold">Importer un menu</h2>
+              <button
+                onClick={() => {
+                  setShowImportModal(false);
+                  setImportFile(null);
+                  setImportResult(null);
+                }}
+                className="p-1 hover:bg-gray-100 rounded"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {!importResult ? (
+              <>
+                <div className="mb-4">
+                  <p className="text-gray-600 text-sm mb-3">
+                    Importez votre menu depuis un fichier Excel ou CSV.
+                    Les categories et tags seront crees automatiquement.
+                  </p>
+                  <a
+                    href="/api/restaurant/menu/template?format=xlsx"
+                    className="inline-flex items-center gap-2 text-violet-600 hover:text-violet-700 text-sm"
+                  >
+                    <Download className="w-4 h-4" />
+                    Telecharger le modele Excel
+                  </a>
+                </div>
+
+                <div
+                  className={`border-2 border-dashed rounded-xl p-8 text-center transition-colors ${
+                    importFile
+                      ? "border-green-500 bg-green-50"
+                      : "border-gray-300 hover:border-violet-400"
+                  }`}
+                >
+                  <input
+                    type="file"
+                    accept=".csv,.xlsx,.xls"
+                    onChange={(e) => setImportFile(e.target.files?.[0] || null)}
+                    className="hidden"
+                    id="import-file"
+                  />
+                  <label htmlFor="import-file" className="cursor-pointer">
+                    {importFile ? (
+                      <div className="flex items-center justify-center gap-2">
+                        <span className="text-green-600 font-medium">
+                          {importFile.name}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            setImportFile(null);
+                          }}
+                          className="text-gray-400 hover:text-gray-600"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      </div>
+                    ) : (
+                      <>
+                        <Upload className="w-8 h-8 text-gray-400 mx-auto mb-2" />
+                        <p className="text-gray-600">
+                          Cliquez ou deposez votre fichier
+                        </p>
+                        <p className="text-sm text-gray-400 mt-1">
+                          Excel (.xlsx) ou CSV
+                        </p>
+                      </>
+                    )}
+                  </label>
+                </div>
+
+                <div className="flex gap-3 mt-6">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowImportModal(false);
+                      setImportFile(null);
+                    }}
+                    className="flex-1 px-4 py-2 border rounded-lg hover:bg-gray-50"
+                  >
+                    Annuler
+                  </button>
+                  <button
+                    onClick={handleImport}
+                    disabled={!importFile || importing}
+                    className="flex-1 px-4 py-2 bg-violet-600 text-white rounded-lg hover:bg-violet-700 disabled:opacity-50 flex items-center justify-center gap-2"
+                  >
+                    {importing ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        Import en cours...
+                      </>
+                    ) : (
+                      "Importer"
+                    )}
+                  </button>
+                </div>
+              </>
+            ) : (
+              <div>
+                {importResult.created > 0 || importResult.success ? (
+                  <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-4">
+                    <p className="text-green-800 font-medium">
+                      Import reussi !
+                    </p>
+                    <ul className="text-sm text-green-700 mt-2 space-y-1">
+                      <li>{importResult.created} plat(s) cree(s)</li>
+                      {importResult.categoriesCreated > 0 && (
+                        <li>
+                          {importResult.categoriesCreated} categorie(s) creee(s)
+                        </li>
+                      )}
+                      {importResult.tagsCreated > 0 && (
+                        <li>{importResult.tagsCreated} tag(s) cree(s)</li>
+                      )}
+                    </ul>
+                  </div>
+                ) : null}
+
+                {importResult.errors && importResult.errors.length > 0 && (
+                  <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-4">
+                    <p className="text-red-800 font-medium mb-2">
+                      {importResult.errors.length} erreur(s)
+                    </p>
+                    <ul className="text-sm text-red-700 space-y-1 max-h-40 overflow-y-auto">
+                      {importResult.errors.map((err, i) => (
+                        <li key={i}>
+                          {err.row > 0 ? `Ligne ${err.row}: ` : ""}
+                          {err.error}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+                <button
+                  onClick={() => {
+                    setShowImportModal(false);
+                    setImportFile(null);
+                    setImportResult(null);
+                  }}
+                  className="w-full px-4 py-2 bg-violet-600 text-white rounded-lg hover:bg-violet-700"
+                >
+                  Fermer
+                </button>
+              </div>
+            )}
           </div>
         </div>
       )}

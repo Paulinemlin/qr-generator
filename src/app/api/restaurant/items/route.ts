@@ -40,6 +40,9 @@ export async function GET(request: NextRequest) {
         category: {
           select: { id: true, name: true },
         },
+        tags: {
+          select: { id: true, name: true, color: true },
+        },
       },
     });
 
@@ -67,7 +70,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { name, description, priceInCents, categoryId, imageUrl } = body;
+    const { name, description, priceInCents, categoryId, imageUrl, tagIds } = body;
 
     if (!name || name.trim().length < 1) {
       return NextResponse.json(
@@ -119,10 +122,16 @@ export async function POST(request: NextRequest) {
         imageUrl: imageUrl || null,
         sortOrder: (lastItem?.sortOrder ?? -1) + 1,
         categoryId,
+        ...(tagIds && Array.isArray(tagIds) && tagIds.length > 0
+          ? { tags: { connect: tagIds.map((id: string) => ({ id })) } }
+          : {}),
       },
       include: {
         category: {
           select: { id: true, name: true },
+        },
+        tags: {
+          select: { id: true, name: true, color: true },
         },
       },
     });
