@@ -590,27 +590,20 @@ export default function BadgeImportPage() {
 
   return (
     <div className="min-h-screen bg-muted/30">
-      {/* Header */}
-      <header className="sticky top-0 z-50 w-full border-b border-border/40 bg-background/80 backdrop-blur-xl">
-        <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-6">
-          <Link href="/" className="flex items-center gap-2">
-            <span className="text-xl font-semibold tracking-tight">QR Generator</span>
-          </Link>
-          <div className="flex items-center gap-3">
-            <Button variant="outline" size="sm" onClick={() => downloadTemplate("xlsx")}>
-              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mr-2">
-                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                <polyline points="7 10 12 15 17 10" />
-                <line x1="12" x2="12" y1="15" y2="3" />
-              </svg>
-              Template
-            </Button>
-            <Link href="/dashboard">
-              <Button variant="ghost" size="sm">Retour</Button>
-            </Link>
-          </div>
+      {/* Template download bar */}
+      <div className="border-b bg-background/80">
+        <div className="mx-auto max-w-7xl px-6 py-3 flex items-center justify-between">
+          <h1 className="text-lg font-semibold">Import de badges</h1>
+          <Button variant="outline" size="sm" onClick={() => downloadTemplate("xlsx")}>
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mr-2">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+              <polyline points="7 10 12 15 17 10" />
+              <line x1="12" x2="12" y1="15" y2="3" />
+            </svg>
+            Template
+          </Button>
         </div>
-      </header>
+      </div>
 
       {/* Success Result Banner */}
       {importResult && importResult.status === "completed" && (

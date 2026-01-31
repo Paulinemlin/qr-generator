@@ -34,14 +34,42 @@ export default async function RestaurantLayout({
       <header className="bg-white border-b sticky top-0 z-40">
         <div className="max-w-7xl mx-auto px-4">
           <div className="flex items-center justify-between h-16">
-            <Link href="/restaurant" className="font-bold text-xl text-violet-600">
-              QR Menu
-            </Link>
+            <div className="flex items-center gap-6">
+              <Link href="/restaurant" className="font-bold text-xl text-violet-600">
+                QR Menu
+              </Link>
+              <nav className="hidden lg:flex items-center gap-1">
+                <Link
+                  href="/dashboard"
+                  className="px-3 py-2 text-sm text-gray-500 hover:text-gray-900 hover:bg-gray-100 rounded-md transition-colors"
+                >
+                  QR Codes
+                </Link>
+                <Link
+                  href="/links"
+                  className="px-3 py-2 text-sm text-gray-500 hover:text-gray-900 hover:bg-gray-100 rounded-md transition-colors"
+                >
+                  Liens courts
+                </Link>
+                <Link
+                  href="/restaurant"
+                  className="px-3 py-2 text-sm font-medium text-violet-600 bg-violet-50 rounded-md"
+                >
+                  Restaurant
+                </Link>
+                <Link
+                  href="/badges/import"
+                  className="px-3 py-2 text-sm text-gray-500 hover:text-gray-900 hover:bg-gray-100 rounded-md transition-colors"
+                >
+                  Badges
+                </Link>
+              </nav>
+            </div>
             <Link
               href="/dashboard"
-              className="text-sm text-gray-500 hover:text-gray-700"
+              className="text-sm text-gray-500 hover:text-gray-700 lg:hidden"
             >
-              Retour au dashboard QR
+              Retour au dashboard
             </Link>
           </div>
         </div>

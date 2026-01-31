@@ -1,6 +1,6 @@
 "use client";
 
-import { useSession, signOut } from "next-auth/react";
+import { useSession } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState, Suspense } from "react";
 import Link from "next/link";
@@ -8,7 +8,6 @@ import Image from "next/image";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Separator } from "@/components/ui/separator";
 import {
   Select,
   SelectContent,
@@ -220,52 +219,6 @@ function DashboardContent() {
 
   return (
     <div className="min-h-screen">
-      {/* Header */}
-      <header className="sticky top-0 z-50 w-full border-b border-border/40 bg-background/80 backdrop-blur-xl supports-[backdrop-filter]:bg-background/60">
-        <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-6">
-          <div className="flex items-center gap-8">
-            <Link href="/" className="flex items-center gap-2">
-              <span className="text-xl font-semibold tracking-tight">
-                QR Generator
-              </span>
-            </Link>
-            <nav className="hidden md:flex items-center gap-1">
-              <Link
-                href="/dashboard"
-                className="px-3 py-2 text-sm font-medium rounded-md bg-accent text-accent-foreground"
-              >
-                QR Codes
-              </Link>
-              <Link
-                href="/links"
-                className="px-3 py-2 text-sm text-muted-foreground hover:text-foreground hover:bg-accent rounded-md transition-colors"
-              >
-                Liens courts
-              </Link>
-              <Link
-                href="/teams"
-                className="px-3 py-2 text-sm text-muted-foreground hover:text-foreground hover:bg-accent rounded-md transition-colors"
-              >
-                Équipes
-              </Link>
-            </nav>
-          </div>
-          <div className="flex items-center gap-4">
-            <span className="hidden sm:inline text-sm text-muted-foreground">
-              {session.user?.email}
-            </span>
-            <Separator orientation="vertical" className="h-6" />
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => signOut({ callbackUrl: "/" })}
-            >
-              Déconnexion
-            </Button>
-          </div>
-        </div>
-      </header>
-
       <main className="mx-auto max-w-6xl px-6 py-12">
         {/* Message de félicitations après souscription réussie */}
         {showSuccess && (

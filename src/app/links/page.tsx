@@ -237,48 +237,6 @@ export default function LinksPage() {
 
   return (
     <div className="min-h-screen">
-      {/* Header */}
-      <header className="sticky top-0 z-50 w-full border-b border-border/40 bg-background/80 backdrop-blur-xl supports-[backdrop-filter]:bg-background/60">
-        <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-6">
-          <div className="flex items-center gap-8">
-            <Link href="/" className="flex items-center gap-2">
-              <span className="text-xl font-semibold tracking-tight">
-                QR Generator
-              </span>
-            </Link>
-            <nav className="hidden md:flex items-center gap-1">
-              <Link
-                href="/dashboard"
-                className="px-3 py-2 text-sm text-muted-foreground hover:text-foreground hover:bg-accent rounded-md transition-colors"
-              >
-                QR Codes
-              </Link>
-              <Link
-                href="/links"
-                className="px-3 py-2 text-sm font-medium rounded-md bg-accent text-accent-foreground"
-              >
-                Liens courts
-              </Link>
-              <Link
-                href="/teams"
-                className="px-3 py-2 text-sm text-muted-foreground hover:text-foreground hover:bg-accent rounded-md transition-colors"
-              >
-                Équipes
-              </Link>
-            </nav>
-          </div>
-          <div className="flex items-center gap-4">
-            <Badge variant="outline">{userPlan?.plan || "FREE"}</Badge>
-            <Link href="/pricing">
-              <Button variant="ghost" size="sm">
-                Upgrade
-              </Button>
-            </Link>
-          </div>
-        </div>
-      </header>
-
-      {/* Main content */}
       <main className="mx-auto max-w-6xl px-6 py-12">
         <div className="flex items-center justify-between mb-10">
           <div>
