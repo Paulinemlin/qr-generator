@@ -6,9 +6,12 @@ export async function GET(
 ) {
   const { slug, tableId } = await params;
 
-  // Build the redirect URL properly to avoid encoding issues on iOS
-  const baseUrl = new URL(request.url).origin;
-  const redirectUrl = new URL(`/m/${encodeURIComponent(slug)}`, baseUrl);
+  // Get the host from headers (works better than request.url for redirects)
+  const host = request.headers.get("host") || "localhost:3000";
+  const protocol = request.headers.get("x-forwarded-proto") || "http";
+
+  // Build the redirect URL
+  const redirectUrl = new URL(`${protocol}://${host}/m/${encodeURIComponent(slug)}`);
   redirectUrl.searchParams.set("tableId", tableId);
 
   // Use 302 redirect with no-cache headers for iOS compatibility

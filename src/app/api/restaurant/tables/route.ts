@@ -3,6 +3,7 @@ import { getServerSession } from "@/lib/auth";
 
 import { prisma } from "@/lib/prisma";
 import { generateQRCodeDataURL } from "@/lib/qr-generator";
+import { getBaseUrl } from "@/lib/url";
 
 async function getRestaurant(userId: string) {
   return prisma.restaurant.findFirst({
@@ -91,7 +92,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Generate the menu URL for this table
-    const baseUrl = process.env.NEXTAUTH_URL || "http://localhost:3000";
+    const baseUrl = getBaseUrl();
 
     // Create table first (to get the ID)
     const table = await prisma.restaurantTable.create({
@@ -173,7 +174,7 @@ export async function PUT(request: NextRequest) {
       );
     }
 
-    const baseUrl = process.env.NEXTAUTH_URL || "http://localhost:3000";
+    const baseUrl = getBaseUrl();
     const tables = [];
 
     for (let i = 1; i <= count; i++) {
