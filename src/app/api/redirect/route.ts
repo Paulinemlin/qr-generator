@@ -1,5 +1,10 @@
 import { prisma } from "@/lib/prisma";
 import { NextRequest, NextResponse } from "next/server";
+import {
+  checkPublicRateLimit,
+  getClientIp,
+  rateLimitResponse,
+} from "@/lib/rate-limit";
 
 export const dynamic = "force-dynamic";
 
@@ -38,6 +43,13 @@ function selectVariant(variants: ABVariant[]): ABVariant | null {
  * Parametres: domain (domaine personnalise), code (shortCode)
  */
 export async function GET(request: NextRequest) {
+  // Rate limiting for public redirect endpoint
+  const ip = getClientIp(request);
+  const rateLimit = await checkPublicRateLimit(ip);
+  if (!rateLimit.success) {
+    return rateLimitResponse(rateLimit);
+  }
+
   const { searchParams } = new URL(request.url);
   const domain = searchParams.get("domain");
   const shortCode = searchParams.get("code");

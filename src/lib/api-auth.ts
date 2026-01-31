@@ -2,6 +2,7 @@ import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { createHash, randomBytes } from "crypto";
 import { PLANS, PlanType } from "@/lib/plans";
+import { checkApiV1RateLimit } from "@/lib/rate-limit";
 
 export interface ApiAuthResult {
   success: boolean;
@@ -84,6 +85,16 @@ export async function validateApiKey(
       success: false,
       error: "API access requires a Business plan subscription.",
       statusCode: 403,
+    };
+  }
+
+  // Check rate limit for API v1
+  const rateLimit = await checkApiV1RateLimit(hashedKey);
+  if (!rateLimit.success) {
+    return {
+      success: false,
+      error: `Rate limit exceeded. Retry after ${Math.ceil((rateLimit.reset - Date.now()) / 1000)} seconds.`,
+      statusCode: 429,
     };
   }
 

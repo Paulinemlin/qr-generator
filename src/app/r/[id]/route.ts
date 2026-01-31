@@ -1,6 +1,11 @@
 import { prisma } from "@/lib/prisma";
 import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
+import {
+  checkPublicRateLimit,
+  getClientIp,
+  rateLimitResponse,
+} from "@/lib/rate-limit";
 
 export const dynamic = "force-dynamic";
 
@@ -37,6 +42,13 @@ export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  // Rate limiting for public redirect endpoint
+  const ip = getClientIp(request);
+  const rateLimit = await checkPublicRateLimit(ip);
+  if (!rateLimit.success) {
+    return rateLimitResponse(rateLimit);
+  }
+
   const { id } = await params;
 
   const qrcode = await prisma.qRCode.findUnique({
@@ -112,8 +124,6 @@ export async function GET(
 
   // Record the scan
   const userAgent = request.headers.get("user-agent") || undefined;
-  const forwarded = request.headers.get("x-forwarded-for");
-  const ip = forwarded ? forwarded.split(",")[0].trim() : undefined;
 
   try {
     await prisma.scan.create({

@@ -22,23 +22,33 @@ enum SubscriptionStatus {
 }
 
 model User {
-  id                   String              @id @default(cuid())
-  email                String              @unique
-  password             String
-  name                 String?
-  plan                 Plan                @default(FREE)
-  stripeCustomerId     String?             @unique
-  stripeSubscriptionId String?             @unique
-  subscriptionStatus   SubscriptionStatus?
-  subscriptionEndDate  DateTime?
-  qrcodes              QRCode[]
-  apiKeys              ApiKey[]
-  customDomains        CustomDomain[]
-  shortLinks           ShortLink[]
-  ownedTeams           Team[]              @relation("TeamOwner")
-  teamMemberships      TeamMember[]
-  createdAt            DateTime            @default(now())
-  updatedAt            DateTime            @default(now()) @updatedAt
+  id                       String              @id @default(cuid())
+  email                    String              @unique
+  password                 String
+  name                     String?
+  plan                     Plan                @default(FREE)
+  stripeCustomerId         String?             @unique
+  stripeSubscriptionId     String?             @unique
+  subscriptionStatus       SubscriptionStatus?
+  subscriptionEndDate      DateTime?
+  // Email verification
+  emailVerified            Boolean             @default(false)
+  emailVerificationToken   String?             @unique
+  emailVerificationExpires DateTime?
+  // Password reset
+  passwordResetToken       String?             @unique
+  passwordResetExpires     DateTime?
+  // Relations
+  qrcodes                  QRCode[]
+  apiKeys                  ApiKey[]
+  customDomains            CustomDomain[]
+  shortLinks               ShortLink[]
+  ownedTeams               Team[]              @relation("TeamOwner")
+  teamMemberships          TeamMember[]
+  badgeBatches             BadgeBatch[]
+  restaurants              Restaurant[]
+  createdAt                DateTime            @default(now())
+  updatedAt                DateTime            @default(now()) @updatedAt
 }
 
 // Modele pour les domaines personnalises (BUSINESS uniquement)
@@ -96,6 +106,8 @@ model QRCode {
   shortCode           String?   @unique
   customDomainId      String?
   customDomain        CustomDomain? @relation(fields: [customDomainId], references: [id], onDelete: SetNull)
+  // Lien vers table restaurant (QR Menu)
+  restaurantTable     RestaurantTable?
 
   @@index([teamId])
   @@index([shortCode])
@@ -209,4 +221,159 @@ model LinkClick {
   clickedAt   DateTime  @default(now())
 
   @@index([shortLinkId])
+}
+
+// Modeles pour l'import de badges evenements (PRO/BUSINESS)
+model BadgeBatch {
+  id             String    @id @default(cuid())
+  name           String
+  status         String    @default("pending") // pending, processing, completed, failed
+  totalCount     Int
+  processedCount Int       @default(0)
+  errorCount     Int       @default(0)
+  errors         Json?
+  badgeConfig    Json
+  pdfUrl         String?
+  zipUrl         String?
+  userId         String
+  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  badges         Badge[]
+  createdAt      DateTime  @default(now())
+  completedAt    DateTime?
+
+  @@index([userId])
+}
+
+model Badge {
+  id        String     @id @default(cuid())
+  firstName String
+  lastName  String
+  company   String
+  website   String?
+  linkedin  String?
+  qrCodeUrl String
+  imageUrl  String?
+  batchId   String
+  batch     BadgeBatch @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  createdAt DateTime   @default(now())
+
+  @@index([batchId])
+}
+
+// ========================================
+// QR MENU - RESTAURANT MODELS
+// ========================================
+
+model Restaurant {
+  id              String            @id @default(cuid())
+  name            String
+  slug            String            @unique
+  description     String?
+  logoUrl         String?
+  currency        String            @default("EUR")
+  // Stripe Connect
+  stripeAccountId String?           @unique
+  stripeOnboarded Boolean           @default(false)
+  // Proprietaire
+  ownerId         String
+  owner           User              @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  // Relations
+  categories      MenuCategory[]
+  tables          RestaurantTable[]
+  orders          Order[]
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @default(now()) @updatedAt
+
+  @@index([ownerId])
+}
+
+model MenuCategory {
+  id           String     @id @default(cuid())
+  name         String
+  description  String?
+  sortOrder    Int        @default(0)
+  isActive     Boolean    @default(true)
+  restaurantId String
+  restaurant   Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  items        MenuItem[]
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @default(now()) @updatedAt
+
+  @@index([restaurantId])
+}
+
+model MenuItem {
+  id           String       @id @default(cuid())
+  name         String
+  description  String?
+  priceInCents Int
+  imageUrl     String?
+  isAvailable  Boolean      @default(true)
+  sortOrder    Int          @default(0)
+  categoryId   String
+  category     MenuCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  orderItems   OrderItem[]
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @default(now()) @updatedAt
+
+  @@index([categoryId])
+}
+
+model RestaurantTable {
+  id           String     @id @default(cuid())
+  tableNumber  String
+  restaurantId String
+  restaurant   Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  // Lien vers QR code
+  qrcodeId     String?    @unique
+  qrcode       QRCode?    @relation(fields: [qrcodeId], references: [id], onDelete: SetNull)
+  orders       Order[]
+  createdAt    DateTime   @default(now())
+
+  @@unique([restaurantId, tableNumber])
+  @@index([restaurantId])
+}
+
+enum OrderStatus {
+  PENDING
+  PAID
+  PREPARING
+  READY
+  COMPLETED
+  CANCELLED
+}
+
+model Order {
+  id                    String          @id @default(cuid())
+  orderNumber           String          @unique
+  status                OrderStatus     @default(PENDING)
+  tableId               String
+  table                 RestaurantTable @relation(fields: [tableId], references: [id])
+  restaurantId          String
+  restaurant            Restaurant      @relation(fields: [restaurantId], references: [id])
+  items                 OrderItem[]
+  totalInCents          Int
+  notes                 String?
+  // Stripe
+  stripePaymentIntentId String?         @unique
+  stripePaymentStatus   String?
+  paidAt                DateTime?
+  createdAt             DateTime        @default(now())
+  updatedAt             DateTime        @default(now()) @updatedAt
+
+  @@index([restaurantId, status])
+  @@index([stripePaymentIntentId])
+}
+
+model OrderItem {
+  id         String   @id @default(cuid())
+  quantity   Int
+  unitPrice  Int
+  notes      String?
+  orderId    String
+  order      Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  menuItemId String
+  menuItem   MenuItem @relation(fields: [menuItemId], references: [id])
+
+  @@index([orderId])
 }
