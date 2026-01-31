@@ -45,6 +45,22 @@ interface Category {
   _count: { items: number };
 }
 
+// Suggestions de catégories pour la restauration
+const CATEGORY_SUGGESTIONS = [
+  "Entrées",
+  "Plats",
+  "Viandes",
+  "Poissons",
+  "Accompagnements",
+  "Desserts",
+  "Boissons",
+  "Vins",
+  "Cocktails",
+  "Formules",
+  "Petit-déjeuner",
+  "Spécialités",
+];
+
 export default function MenuPage() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [tags, setTags] = useState<MenuTag[]>([]);
@@ -528,6 +544,31 @@ export default function MenuPage() {
             </h2>
             <form onSubmit={handleSaveCategory}>
               <div className="space-y-4">
+                {!editingCategory && (
+                  <div>
+                    <label className="block text-sm font-medium mb-2">
+                      Suggestions
+                    </label>
+                    <div className="flex flex-wrap gap-2">
+                      {CATEGORY_SUGGESTIONS.filter(
+                        (s) => !categories.some((c) => c.name.toLowerCase() === s.toLowerCase())
+                      ).map((suggestion) => (
+                        <button
+                          key={suggestion}
+                          type="button"
+                          onClick={() => setCategoryName(suggestion)}
+                          className={`px-3 py-1.5 text-sm rounded-full transition-colors ${
+                            categoryName === suggestion
+                              ? "bg-violet-600 text-white"
+                              : "bg-gray-100 text-gray-700 hover:bg-violet-100 hover:text-violet-700"
+                          }`}
+                        >
+                          {suggestion}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
                 <div>
                   <label className="block text-sm font-medium mb-1">Nom</label>
                   <input
@@ -535,6 +576,7 @@ export default function MenuPage() {
                     value={categoryName}
                     onChange={(e) => setCategoryName(e.target.value)}
                     className="w-full px-4 py-2 border rounded-lg"
+                    placeholder="ou saisissez un nom personnalisé"
                     required
                   />
                 </div>
