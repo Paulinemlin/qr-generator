@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
+import Link from "next/link";
 import {
   Loader2,
   CreditCard,
@@ -10,73 +11,7 @@ import {
   ExternalLink,
   Save,
   Palette,
-  Image as ImageIcon,
-  ShoppingBag,
 } from "lucide-react";
-
-// Theme presets
-const THEME_PRESETS = {
-  DEFAULT: {
-    label: "Par defaut",
-    primaryColor: "#7c3aed",
-    accentColor: "#8b5cf6",
-    backgroundColor: "#f9fafb",
-    textColor: "#111827",
-  },
-  DARK: {
-    label: "Sombre",
-    primaryColor: "#a78bfa",
-    accentColor: "#c4b5fd",
-    backgroundColor: "#1f2937",
-    textColor: "#f9fafb",
-  },
-  ELEGANT: {
-    label: "Elegant",
-    primaryColor: "#b45309",
-    accentColor: "#d97706",
-    backgroundColor: "#fffbeb",
-    textColor: "#78350f",
-  },
-  VIBRANT: {
-    label: "Vibrant",
-    primaryColor: "#dc2626",
-    accentColor: "#f97316",
-    backgroundColor: "#fff7ed",
-    textColor: "#1c1917",
-  },
-  MINIMAL: {
-    label: "Minimal",
-    primaryColor: "#18181b",
-    accentColor: "#3f3f46",
-    backgroundColor: "#ffffff",
-    textColor: "#18181b",
-  },
-  CUSTOM: {
-    label: "Personnalise",
-    primaryColor: "#7c3aed",
-    accentColor: "#8b5cf6",
-    backgroundColor: "#f9fafb",
-    textColor: "#111827",
-  },
-};
-
-const ORDERING_MODES = {
-  CALL_WAITER: {
-    label: "Appeler le serveur",
-    description: "Les clients commandent et appellent un serveur pour confirmer",
-  },
-  PAY_LATER: {
-    label: "Payer plus tard",
-    description: "Les clients commandent et paient a la fin du repas",
-  },
-  PAYMENT_REQUIRED: {
-    label: "Paiement en ligne",
-    description: "Les clients paient directement via Stripe (Apple Pay, CB...)",
-  },
-};
-
-type ThemeKey = keyof typeof THEME_PRESETS;
-type OrderingMode = keyof typeof ORDERING_MODES;
 
 interface Restaurant {
   id: string;
@@ -86,13 +21,6 @@ interface Restaurant {
   currency: string;
   stripeAccountId: string | null;
   stripeOnboarded: boolean;
-  menuTheme: ThemeKey;
-  primaryColor: string;
-  accentColor: string;
-  backgroundColor: string;
-  textColor: string;
-  showItemImages: boolean;
-  orderingMode: OrderingMode;
 }
 
 interface StripeStatus {
@@ -118,15 +46,6 @@ export default function SettingsPage() {
   const [description, setDescription] = useState("");
   const [currency, setCurrency] = useState("EUR");
 
-  // Theme state
-  const [menuTheme, setMenuTheme] = useState<ThemeKey>("DEFAULT");
-  const [primaryColor, setPrimaryColor] = useState("#7c3aed");
-  const [accentColor, setAccentColor] = useState("#8b5cf6");
-  const [backgroundColor, setBackgroundColor] = useState("#f9fafb");
-  const [textColor, setTextColor] = useState("#111827");
-  const [showItemImages, setShowItemImages] = useState(true);
-  const [orderingMode, setOrderingMode] = useState<OrderingMode>("CALL_WAITER");
-
   useEffect(() => {
     fetchData();
   }, [stripeParam]);
@@ -147,13 +66,6 @@ export default function SettingsPage() {
         setName(r.name);
         setDescription(r.description || "");
         setCurrency(r.currency);
-        setMenuTheme(r.menuTheme || "DEFAULT");
-        setPrimaryColor(r.primaryColor || "#7c3aed");
-        setAccentColor(r.accentColor || "#8b5cf6");
-        setBackgroundColor(r.backgroundColor || "#f9fafb");
-        setTextColor(r.textColor || "#111827");
-        setShowItemImages(r.showItemImages !== false);
-        setOrderingMode(r.orderingMode || "CALL_WAITER");
       }
 
       setStripeStatus(stripeData);
@@ -161,17 +73,6 @@ export default function SettingsPage() {
       console.error("Error fetching data:", error);
     } finally {
       setLoading(false);
-    }
-  }
-
-  function handleThemeChange(theme: ThemeKey) {
-    setMenuTheme(theme);
-    if (theme !== "CUSTOM") {
-      const preset = THEME_PRESETS[theme];
-      setPrimaryColor(preset.primaryColor);
-      setAccentColor(preset.accentColor);
-      setBackgroundColor(preset.backgroundColor);
-      setTextColor(preset.textColor);
     }
   }
 
@@ -187,13 +88,6 @@ export default function SettingsPage() {
           name,
           description,
           currency,
-          menuTheme,
-          primaryColor,
-          accentColor,
-          backgroundColor,
-          textColor,
-          showItemImages,
-          orderingMode,
         }),
       });
 
@@ -338,242 +232,24 @@ export default function SettingsPage() {
           </div>
         </div>
 
-        {/* Ordering mode */}
-        <div className="bg-white rounded-xl border p-6">
-          <div className="flex items-start gap-4 mb-4">
-            <div className="w-10 h-10 rounded-lg bg-green-100 flex items-center justify-center">
-              <ShoppingBag className="w-5 h-5 text-green-600" />
-            </div>
-            <div>
-              <h2 className="font-semibold text-lg">Mode de commande</h2>
-              <p className="text-sm text-gray-500">
-                Choisissez comment les clients passent leurs commandes
-              </p>
-            </div>
-          </div>
-
-          <div className="space-y-3">
-            {(Object.keys(ORDERING_MODES) as OrderingMode[]).map((mode) => {
-              const info = ORDERING_MODES[mode];
-              const isDisabled = mode === "PAYMENT_REQUIRED" && !stripeStatus?.onboarded;
-
-              return (
-                <label
-                  key={mode}
-                  className={`flex items-start gap-3 p-4 border rounded-lg cursor-pointer transition-colors ${
-                    orderingMode === mode
-                      ? "border-violet-500 bg-violet-50"
-                      : isDisabled
-                        ? "border-gray-200 bg-gray-50 opacity-60 cursor-not-allowed"
-                        : "border-gray-200 hover:border-gray-300"
-                  }`}
-                >
-                  <input
-                    type="radio"
-                    name="orderingMode"
-                    value={mode}
-                    checked={orderingMode === mode}
-                    onChange={() => !isDisabled && setOrderingMode(mode)}
-                    disabled={isDisabled}
-                    className="mt-1"
-                  />
-                  <div>
-                    <span className="font-medium">{info.label}</span>
-                    <p className="text-sm text-gray-500">{info.description}</p>
-                    {isDisabled && (
-                      <p className="text-xs text-orange-600 mt-1">
-                        Connectez Stripe pour activer ce mode
-                      </p>
-                    )}
-                  </div>
-                </label>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* Theme settings */}
-        <div className="bg-white rounded-xl border p-6">
-          <div className="flex items-start gap-4 mb-4">
+        {/* Theme link */}
+        <Link
+          href="/restaurant/menu/apparence"
+          className="block bg-white rounded-xl border p-6 hover:border-violet-300 transition-colors"
+        >
+          <div className="flex items-center gap-4">
             <div className="w-10 h-10 rounded-lg bg-violet-100 flex items-center justify-center">
               <Palette className="w-5 h-5 text-violet-600" />
             </div>
-            <div>
-              <h2 className="font-semibold text-lg">Theme du menu</h2>
-              <p className="text-sm text-gray-500">
-                Personnalisez l&apos;apparence de votre carte
-              </p>
-            </div>
-          </div>
-
-          {/* Theme presets */}
-          <div className="grid grid-cols-3 gap-2 mb-6">
-            {(Object.keys(THEME_PRESETS) as ThemeKey[]).map((theme) => {
-              const preset = THEME_PRESETS[theme];
-              return (
-                <button
-                  key={theme}
-                  type="button"
-                  onClick={() => handleThemeChange(theme)}
-                  className={`p-3 rounded-lg border-2 transition-all ${
-                    menuTheme === theme
-                      ? "border-violet-500 ring-2 ring-violet-200"
-                      : "border-gray-200 hover:border-gray-300"
-                  }`}
-                >
-                  <div
-                    className="h-8 rounded mb-2 flex items-center justify-center"
-                    style={{ backgroundColor: preset.backgroundColor }}
-                  >
-                    <div
-                      className="w-4 h-4 rounded-full"
-                      style={{ backgroundColor: preset.primaryColor }}
-                    />
-                  </div>
-                  <span className="text-xs font-medium">{preset.label}</span>
-                </button>
-              );
-            })}
-          </div>
-
-          {/* Custom colors (only show if CUSTOM is selected) */}
-          {menuTheme === "CUSTOM" && (
-            <div className="grid grid-cols-2 gap-4 p-4 bg-gray-50 rounded-lg">
-              <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">
-                  Couleur principale
-                </label>
-                <div className="flex gap-2">
-                  <input
-                    type="color"
-                    value={primaryColor}
-                    onChange={(e) => setPrimaryColor(e.target.value)}
-                    className="w-10 h-10 rounded cursor-pointer"
-                  />
-                  <input
-                    type="text"
-                    value={primaryColor}
-                    onChange={(e) => setPrimaryColor(e.target.value)}
-                    className="flex-1 px-2 py-1 border rounded text-sm font-mono"
-                  />
-                </div>
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">
-                  Couleur d&apos;accent
-                </label>
-                <div className="flex gap-2">
-                  <input
-                    type="color"
-                    value={accentColor}
-                    onChange={(e) => setAccentColor(e.target.value)}
-                    className="w-10 h-10 rounded cursor-pointer"
-                  />
-                  <input
-                    type="text"
-                    value={accentColor}
-                    onChange={(e) => setAccentColor(e.target.value)}
-                    className="flex-1 px-2 py-1 border rounded text-sm font-mono"
-                  />
-                </div>
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">
-                  Fond
-                </label>
-                <div className="flex gap-2">
-                  <input
-                    type="color"
-                    value={backgroundColor}
-                    onChange={(e) => setBackgroundColor(e.target.value)}
-                    className="w-10 h-10 rounded cursor-pointer"
-                  />
-                  <input
-                    type="text"
-                    value={backgroundColor}
-                    onChange={(e) => setBackgroundColor(e.target.value)}
-                    className="flex-1 px-2 py-1 border rounded text-sm font-mono"
-                  />
-                </div>
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">
-                  Texte
-                </label>
-                <div className="flex gap-2">
-                  <input
-                    type="color"
-                    value={textColor}
-                    onChange={(e) => setTextColor(e.target.value)}
-                    className="w-10 h-10 rounded cursor-pointer"
-                  />
-                  <input
-                    type="text"
-                    value={textColor}
-                    onChange={(e) => setTextColor(e.target.value)}
-                    className="flex-1 px-2 py-1 border rounded text-sm font-mono"
-                  />
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Preview */}
-          <div className="mt-4 p-4 rounded-lg border" style={{ backgroundColor }}>
-            <div className="flex items-center gap-2 mb-2">
-              <div
-                className="w-8 h-8 rounded-full"
-                style={{ backgroundColor: primaryColor }}
-              />
-              <span className="font-semibold" style={{ color: textColor }}>
-                Apercu du menu
-              </span>
-            </div>
-            <p className="text-sm" style={{ color: textColor, opacity: 0.7 }}>
-              Voici a quoi ressemblera votre carte
-            </p>
-            <button
-              type="button"
-              className="mt-3 px-4 py-2 rounded-full text-sm font-medium text-white"
-              style={{ backgroundColor: primaryColor }}
-            >
-              Ajouter au panier
-            </button>
-          </div>
-        </div>
-
-        {/* Image settings */}
-        <div className="bg-white rounded-xl border p-6">
-          <div className="flex items-start gap-4">
-            <div className="w-10 h-10 rounded-lg bg-blue-100 flex items-center justify-center">
-              <ImageIcon className="w-5 h-5 text-blue-600" />
-            </div>
             <div className="flex-1">
-              <h2 className="font-semibold text-lg">Affichage des images</h2>
-              <p className="text-sm text-gray-500 mb-4">
-                Affichez ou masquez les photos de vos plats
+              <h2 className="font-semibold text-lg">Apparence du menu</h2>
+              <p className="text-gray-500 text-sm">
+                Theme, couleurs, typographie et mode de commande
               </p>
-
-              <label className="flex items-center gap-3 cursor-pointer">
-                <div
-                  className={`relative w-12 h-6 rounded-full transition-colors ${
-                    showItemImages ? "bg-violet-600" : "bg-gray-300"
-                  }`}
-                  onClick={() => setShowItemImages(!showItemImages)}
-                >
-                  <div
-                    className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${
-                      showItemImages ? "translate-x-6" : "translate-x-0.5"
-                    }`}
-                  />
-                </div>
-                <span className="text-sm font-medium">
-                  {showItemImages ? "Images activees" : "Images desactivees"}
-                </span>
-              </label>
             </div>
+            <ExternalLink className="w-5 h-5 text-gray-400" />
           </div>
-        </div>
+        </Link>
 
         {/* Stripe Connect */}
         <div className="bg-white rounded-xl border p-6">
@@ -643,7 +319,7 @@ export default function SettingsPage() {
             ) : (
               <Save className="w-4 h-4" />
             )}
-            Enregistrer les modifications
+            Enregistrer
           </button>
         </div>
       </form>

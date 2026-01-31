@@ -273,6 +273,16 @@ enum MenuTheme {
   CUSTOM
 }
 
+enum MenuFont {
+  SYSTEM        // Default system font
+  INTER         // Inter - Modern sans-serif
+  PLAYFAIR      // Playfair Display - Elegant serif
+  POPPINS       // Poppins - Friendly sans-serif
+  LORA          // Lora - Classic serif
+  ROBOTO        // Roboto - Clean sans-serif
+  MERRIWEATHER  // Merriweather - Readable serif
+}
+
 enum OrderingMode {
   PAYMENT_REQUIRED  // Paiement Stripe obligatoire
   CALL_WAITER       // Commander puis appeler le serveur
@@ -291,6 +301,7 @@ model Restaurant {
   stripeOnboarded Boolean           @default(false)
   // Theme du menu
   menuTheme       MenuTheme         @default(DEFAULT)
+  menuFont        MenuFont          @default(SYSTEM)
   primaryColor    String            @default("#7c3aed")   // violet-600
   accentColor     String            @default("#8b5cf6")   // violet-500
   backgroundColor String            @default("#f9fafb")   // gray-50

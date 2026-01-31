@@ -23,6 +23,7 @@ export async function GET(
         stripeOnboarded: true,
         // Theme settings
         menuTheme: true,
+        menuFont: true,
         primaryColor: true,
         accentColor: true,
         backgroundColor: true,
@@ -89,6 +90,7 @@ export async function GET(
         canAcceptPayments,
         // Theme settings
         menuTheme: restaurant.menuTheme,
+        menuFont: restaurant.menuFont,
         primaryColor: restaurant.primaryColor,
         accentColor: restaurant.accentColor,
         backgroundColor: restaurant.backgroundColor,

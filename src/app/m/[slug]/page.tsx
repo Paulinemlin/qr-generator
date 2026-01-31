@@ -30,6 +30,7 @@ interface Category {
 }
 
 type MenuTheme = "DEFAULT" | "DARK" | "ELEGANT" | "VIBRANT" | "MINIMAL" | "CUSTOM";
+type MenuFont = "SYSTEM" | "INTER" | "PLAYFAIR" | "POPPINS" | "LORA" | "ROBOTO" | "MERRIWEATHER";
 type OrderingMode = "PAYMENT_REQUIRED" | "CALL_WAITER" | "PAY_LATER";
 
 interface Restaurant {
@@ -41,6 +42,7 @@ interface Restaurant {
   currency: string;
   canAcceptPayments: boolean;
   menuTheme: MenuTheme;
+  menuFont: MenuFont;
   primaryColor: string;
   accentColor: string;
   backgroundColor: string;
@@ -48,6 +50,17 @@ interface Restaurant {
   showItemImages: boolean;
   orderingMode: OrderingMode;
 }
+
+// Font configurations
+const fontConfigs: Record<MenuFont, { family: string; googleUrl: string | null }> = {
+  SYSTEM: { family: "system-ui, sans-serif", googleUrl: null },
+  INTER: { family: "'Inter', sans-serif", googleUrl: "https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" },
+  PLAYFAIR: { family: "'Playfair Display', serif", googleUrl: "https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500;600;700&display=swap" },
+  POPPINS: { family: "'Poppins', sans-serif", googleUrl: "https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" },
+  LORA: { family: "'Lora', serif", googleUrl: "https://fonts.googleapis.com/css2?family=Lora:wght@400;500;600;700&display=swap" },
+  ROBOTO: { family: "'Roboto', sans-serif", googleUrl: "https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" },
+  MERRIWEATHER: { family: "'Merriweather', serif", googleUrl: "https://fonts.googleapis.com/css2?family=Merriweather:wght@400;700&display=swap" },
+};
 
 interface Table {
   id: string;
@@ -122,6 +135,23 @@ function MenuContent({ slug }: { slug: string }) {
     fetchMenu();
   }, [slug, tableId]);
 
+  // Load Google Font when restaurant data is available
+  useEffect(() => {
+    if (!restaurant?.menuFont) return;
+
+    const fontConfig = fontConfigs[restaurant.menuFont];
+    if (fontConfig.googleUrl) {
+      const existingLink = document.getElementById(`font-${restaurant.menuFont}`);
+      if (!existingLink) {
+        const link = document.createElement("link");
+        link.href = fontConfig.googleUrl;
+        link.rel = "stylesheet";
+        link.id = `font-${restaurant.menuFont}`;
+        document.head.appendChild(link);
+      }
+    }
+  }, [restaurant?.menuFont]);
+
   const handleAddItem = (item: MenuItem) => {
     setAddingItem(item.id);
     addItem({
@@ -173,11 +203,12 @@ function MenuContent({ slug }: { slug: string }) {
   const theme = getThemeColors(restaurant);
   const orderingEnabled = canOrder(restaurant);
   const isDarkTheme = restaurant.menuTheme === "DARK";
+  const fontFamily = fontConfigs[restaurant.menuFont || "SYSTEM"].family;
 
   return (
     <div
       className="min-h-screen pb-24"
-      style={{ backgroundColor: theme.bg, color: theme.text }}
+      style={{ backgroundColor: theme.bg, color: theme.text, fontFamily }}
     >
       {/* Header */}
       <header

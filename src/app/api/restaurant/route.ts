@@ -148,6 +148,7 @@ export async function PUT(request: NextRequest) {
       currency,
       logoUrl,
       menuTheme,
+      menuFont,
       primaryColor,
       accentColor,
       backgroundColor,
@@ -183,6 +184,10 @@ export async function PUT(request: NextRequest) {
     // Theme settings
     if (menuTheme !== undefined) {
       updateData.menuTheme = menuTheme;
+    }
+
+    if (menuFont !== undefined) {
+      updateData.menuFont = menuFont;
     }
 
     if (primaryColor !== undefined) {

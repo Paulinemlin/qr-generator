@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
+import Link from "next/link";
 import {
   Loader2,
   Plus,
@@ -15,6 +16,7 @@ import {
   Download,
   Tag,
   X,
+  Palette,
 } from "lucide-react";
 import { formatPrice } from "@/lib/cart";
 
@@ -363,6 +365,13 @@ export default function MenuPage() {
           <p className="text-gray-500">Gerez vos categories et plats</p>
         </div>
         <div className="flex items-center gap-2">
+          <Link
+            href="/restaurant/menu/apparence"
+            className="flex items-center gap-2 px-4 py-2 border border-violet-300 text-violet-700 rounded-lg hover:bg-violet-50"
+          >
+            <Palette className="w-4 h-4" />
+            Apparence
+          </Link>
           <a
             href="/api/restaurant/menu/template?format=xlsx"
             className="flex items-center gap-2 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50"
